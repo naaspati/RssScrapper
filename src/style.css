@@ -1,0 +1,31 @@
+.root {
+	-fx-background-color:white;
+}
+.info-box {
+	-fx-border-width:1;
+	-fx-border-color:lightgray;
+	-fx-font-size:15;
+	-fx-font-family:'Kristen ITC';
+	-fx-padding:10;
+	-fx-background-color:white;
+	-fx-effect:dropshadow(three-pass-box, rgba(0,0,0,0.1),0.1,0,2,2);
+}
+
+.info-box:disabled {
+	-fx-background-color:derive(white, -10%);
+}
+.info-box.completed {
+	-fx-background-color:derive(lightgreen, 60%);
+}
+
+.info-box .progress-text {
+ 	-fx-fill:#6B8E23;
+}
+.info-box .failed-text {
+ 	-fx-fill:crimson;
+}
+.info-box .total-text {
+ 	-fx-fill:#2E8B57;
+}
+
+
