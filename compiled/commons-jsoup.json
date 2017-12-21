@@ -92,7 +92,7 @@
     },
 	{
 	"name":"pleated-jeans",
-	"selector":".lazyload",
+	"selector":"img .size-full",
 	"attr":"data-src",
 	"dir":"pleated-jeans"
 	}

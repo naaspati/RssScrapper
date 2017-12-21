@@ -1,0 +1,46 @@
+apply plugin: 'java'
+apply plugin: 'application'
+apply plugin: 'java'
+apply plugin: 'application'
+// apply plugin: 'eclipse'
+
+repositories {
+    jcenter()
+}
+
+def importsDir = 'C:/Users/Sameer/Documents/MEGA/eclipse_workplace/imports/'
+
+dependencies {
+   
+   compile files(
+      'myutils.jar',
+      importsDir + 'jsoup/jsoup-1.10.3.jar',
+      importsDir + 'jaunt/jaunt.jar',
+      importsDir + 'quick-json-1.0.2.3.jar'
+    )
+   testCompile 'junit:junit:4.12'
+}
+ 
+version = 1.02
+sourceCompatibility = JavaVersion.VERSION_1_8 
+targetCompatibility = JavaVersion.VERSION_1_8
+ 
+mainClassName = 'Main'
+
+task copy(type: Copy) {
+  from(fileTree("$buildDir/install/${distributions.main.baseName}"))
+  into("$rootDir/compiled")
+}
+
+run {
+    environment('APP_HOME', "$rootDir/compiled")
+}
+jar {
+  manifest {
+        attributes('Manifest-Version': '1.0',
+                   'Implementation-Version': version,
+                   'Main-Class':"$mainClassName",	
+                   'Class-Path':'.'
+                   )
+    }
+}

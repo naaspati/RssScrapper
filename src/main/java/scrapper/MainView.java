@@ -9,7 +9,6 @@ import static sam.console.ansi.ANSI.yellow;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -324,12 +323,12 @@ public final class MainView extends Application {
 
         Map<String, Path> map = AbstractScrapper.getFailedDownloads();
 
-        writeList("failed-rss-owl.txt", groupByHost(AbstractScrapper.getFailed()), false);
-        writeList("failed-downlods.txt", groupByHost(map.keySet())
+        writeList("failed-rss-owl.txt", AbstractScrapper.getFailed(), false);
+        writeList("failed-downlods.txt", map.keySet()
                 .stream().map(s -> s +"\t"+ (map.get(s) == null ? "" : map.get(s)))
                 .collect(Collectors.toList()),
                 false);    
-        writeList("new 1.txt", AbstractScrapper.getYoutube());
+        writeList("youtube.txt", AbstractScrapper.getYoutube());
 
         System.out.println(yellow("\nfile walking"));
 
@@ -370,27 +369,6 @@ public final class MainView extends Application {
         System.out.println("\n\n"+FINISHED_BANNER);
     }
 
-    private Collection<String> groupByHost(Collection<String> list) {
-        if(list == null || list.isEmpty())
-            return list;
-
-        List<String> list2 = new ArrayList<>(); 
-
-        list
-        .stream()
-        .collect(Collectors.groupingBy(s -> {
-            try {
-                return new URL(s).getHost();
-            } catch (Exception e) {}
-            return null;
-        }))
-        .forEach((host, lst) -> {
-            list2.add("\n-----------------------\n"+host+"\n-----------------------\n");
-            list2.addAll(lst);
-        });
-
-        return list2;
-    }
     private void writeList(String path, Collection<String> urls) throws IOException {
         writeList(path, urls, true);
     }

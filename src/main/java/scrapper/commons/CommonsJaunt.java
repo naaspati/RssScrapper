@@ -15,7 +15,7 @@ import com.jaunt.UserAgent;
 
 public class CommonsJaunt extends Commons {
     protected CommonsJaunt(Collection<String> urls) throws IOException {
-        super(urls, Paths.get("commons-jaunt.json"));
+        super(urls, Paths.get(System.getenv("APP_HOME"), "commons-jaunt.json"));
     }
 
     @Override

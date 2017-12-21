@@ -78,7 +78,8 @@ public class Main {
         Application.launch(MainView.class, args);
     }
     private static void download() throws IOException {
-        final Path path = Paths.get("D:\\Downloads\\scrapper\\failed-downlods.txt");
+        ResourceBundle rb = ResourceBundle.getBundle("config");
+        final Path path = Paths.get(rb.getString("root.dir")).resolve("failed-downlods.txt");
 
         if(Files.notExists(path)) {
             System.out.println(red("file not found")+path);
@@ -90,8 +91,6 @@ public class Main {
             System.out.println(red("nothing found in\n")+path);
             return;
         }
-
-        ResourceBundle rb = ResourceBundle.getBundle("config");
 
         int CONNECT_TIMEOUT = Integer.parseInt(rb.getString("connect_timeout"));
         int READ_TIMEOUT = Integer.parseInt(rb.getString("read_timeout"));

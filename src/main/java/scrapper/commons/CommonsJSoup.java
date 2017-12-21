@@ -13,9 +13,8 @@ import org.jsoup.select.Elements;
 
 public class CommonsJSoup extends Commons {
    protected CommonsJSoup(Collection<String> urls) throws IOException {
-        super(urls, Paths.get("commons-jsoup.json"));
+        super(urls, Paths.get(System.getenv("APP_HOME"), "commons-jsoup.json"));
     }
-
     @Override
     protected Store scrap(CommonEntry c, String urlString) {
         try {
