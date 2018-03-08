@@ -1,36 +1,36 @@
 package scrapper;
+import static java.util.stream.Collectors.partitioningBy;
+import static java.util.stream.Collectors.toCollection;
+import static java.util.stream.Collectors.toList;
 import static sam.console.ansi.ANSI.FINISHED_BANNER;
-import static sam.console.ansi.ANSI.createUnColoredBanner;
 import static sam.console.ansi.ANSI.cyan;
 import static sam.console.ansi.ANSI.green;
 import static sam.console.ansi.ANSI.red;
 import static sam.console.ansi.ANSI.yellow;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.ResourceBundle;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -52,24 +52,20 @@ import javafx.stage.Stage;
 import sam.console.ansi.ANSI;
 import sam.myutils.fileutils.FilesUtils;
 import sam.myutils.myutils.MyUtils;
-import scrapper.abstractscrapper.AbstractScrapper;
-import scrapper.abstractscrapper.AbstractScrapper.Callable2;
-import scrapper.abstractscrapper.AbstractScrapper.DownloadTask;
-import scrapper.abstractscrapper.AbstractScrapper.Store;
-import scrapper.commons.Commons;
-import scrapper.specials.Specials;
+import scrapper.scrapper.AbstractScrapper;
+import scrapper.scrapper.Callable2;
+import scrapper.scrapper.DataStore;
+import scrapper.scrapper.DownloadTask;
+import scrapper.scrapper.ScrappingResult;
+import scrapper.scrapper.commons.Commons;
+import scrapper.scrapper.specials.Specials;
 
 public final class MainView extends Application {
-    private static volatile boolean downloadStarted = false; 
-    private static final Path rootDir;
-    private static final int THREAD_COUNT;
+    private static volatile boolean downloadStarted = false;
+    private Logger logger = LoggerFactory.getLogger(getClass());
 
     static {
         System.out.println(ANSI.green("MainView initiated"));
-        
-        ResourceBundle rb = ResourceBundle.getBundle("config");
-        THREAD_COUNT = Integer.parseInt(rb.getString("thread_count"));
-        rootDir = Paths.get(rb.getString("root.dir"));
     }
 
     private final TilePane infoBoxes = new TilePane(10,  10);
@@ -112,194 +108,215 @@ public final class MainView extends Application {
         stage.setScene(scene);
 
         scene.getStylesheets().add(ClassLoader.getSystemResource("style.css").toString());
-        
+
         start2(urls);
 
         stage.setWidth(520);
         stage.setHeight(400);
         stage.show();
     }
-    
+
     @Override
     public void stop() throws Exception {
         System.exit(0);
     }
     ArrayList<AbstractScrapper> scrappers;
     private void start2(final Collection<String> urls) throws IOException, InstantiationException, IllegalAccessException, URISyntaxException {
-        final int total = urls.size(); 
+        final int total = urls.size();
 
         scrappers = new ArrayList<>();
         scrappers.addAll(Commons.get(urls));
         scrappers.addAll(Specials.get(urls));
 
+        info("\n"+
+                yellow("total urls: {}\n")+
+                green("good urls: {}\n")+
+                red("bad urls: {}\n"), total, scrappers.stream().mapToInt(AbstractScrapper::size).sum(), urls.size());
 
-        System.out.println("\n");
-        System.out.println(yellow("total urls: "+total));
-        System.out.println(green("good urls: "+scrappers.stream().mapToInt(AbstractScrapper::size).sum()));
-        System.out.println(red("bad urls: "+urls.size()));
-
-        writeList("bad_urls.txt", urls);
-
-        if(scrappers.isEmpty())
-            showErrorAndExit(urls.isEmpty() ? "failed : no urls" : "failed : only bad urls");
-
-        Iterator<AbstractScrapper> miterator = scrappers.iterator();
-        List<String> failedDirMk = new ArrayList<>();
-
-        while(miterator.hasNext()){
-            AbstractScrapper m = miterator.next();
-
-            try {
-                Files.createDirectories(m.getPath());
-            } catch (Exception e) {
-                failedDirMk.add(m+"\n  "+m.getPath()+"\n  "+e+"\n");
-                failedDirMk.add(String.join("\n   ", m.getUrls()));
-                failedDirMk.add("\n");
-                miterator.remove();
-            }
-        }
-
-        if(!failedDirMk.isEmpty()){
-            failedDirMk.add(0, createUnColoredBanner("failed to create dir")+"\n\n");
-            Files.write(rootDir.resolve("failed-dir-make.txt"), failedDirMk, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-        }
-
-        failedDirMk = null;
-        miterator = null;
+        if(!urls.isEmpty())
+            DataStore.BAD_URLS.getData().addAll(urls);
 
         if(scrappers.isEmpty())
             showErrorAndExit(urls.isEmpty() ? "failed : no urls" : "failed : only bad urls");
 
-        System.out.println(cyan("Total: ")+scrappers.stream().mapToInt(AbstractScrapper::size).sum());
-        System.out.println(cyan("---------------------------------------------"));
-        String format = "%-25s%s\n";
-        System.out.printf(yellow(String.format(format, "method_name", "count")));
+        info(cyan("Total: ")+scrappers.stream().mapToInt(AbstractScrapper::size).sum());
+        info(cyan("---------------------------------------------"));
+        String format = "%-25s%s";
+        info(yellow(String.format(format, "method_name", "count")));
         scrappers.forEach(s -> s.printCount(format));
-        System.out.println(cyan("---------------------------------------------"));
-        System.out.println("\n");
+        info(cyan("---------------------------------------------"));
+        info("\n");
 
         Map<Boolean, List<Callable2>> tasks = 
                 scrappers.stream()
                 .flatMap(AbstractScrapper::tasks)
-                .collect(Collectors.partitioningBy(Callable2::isCompleted));
+                .collect(partitioningBy(Callable2::isCompleted));
 
-        List<Store> completedTasks = tasks.getOrDefault(true, new ArrayList<>()).stream().map(Callable2::getCompleted).collect(Collectors.toList());
-        List<Callable<Store>> remainingTasks = tasks.getOrDefault(false, new ArrayList<>()).stream().map(Callable2::getTask).collect(Collectors.toList());;
+        List<ScrappingResult> completedTasks = tasks.getOrDefault(true, new ArrayList<>()).stream().map(Callable2::getCompleted).collect(toList());
+        List<Callable<ScrappingResult>> remainingTasks = tasks.getOrDefault(false, new ArrayList<>()).stream().map(Callable2::getTask).collect(toList());;
 
         if(remainingTasks.isEmpty() && completedTasks.isEmpty())
             showErrorAndExit("no tasks found, to perform");
 
         scrappers.stream().map(AbstractScrapper::getInfoBox)
-        .collect(Collectors.toCollection(infoBoxes::getChildren));
+        .collect(toCollection(infoBoxes::getChildren));
 
-        ExecutorService ex = Executors.newFixedThreadPool(THREAD_COUNT);
-
-        AtomicInteger remaining = new AtomicInteger(remainingTasks.size() + 1);
         String format2 = "remaining: %d  | total: "+total+ "  | thread-count: %d%n";
         final double total2 = total;
+        CountDownLatch latch = new CountDownLatch(remainingTasks.size());
 
         stage.setTitle("Scrapping");
+        AtomicInteger threadCount = new AtomicInteger(0);
 
-        AbstractScrapper.setProgressor(() -> {
-            int r = remaining.decrementAndGet();
-            status.setText(String.format(format2, r, Thread.activeCount()));
-            progressBar.setProgress((total2 - r) / total2);
-        }, true);
-
-        Thread t = new Thread(() -> {
-            try {
-                System.out.println("\n\n");
-                System.out.println(ANSI.createBanner("SCRAPPING"));
-
-                Stream<Store> remainingStream = Stream.empty(); 
-
-                if(!remainingTasks.isEmpty()) {
-                    Collections.shuffle(remainingTasks);
-                    List<Future<Store>> futures = ex.invokeAll(remainingTasks);
-
-                    remainingStream = futures.stream()
-                            .map(f -> {
-                                try {
-                                    return f.get();
-                                } catch (InterruptedException | ExecutionException| NullPointerException e) {}
-                                return null;
-                            })
-                            .filter(Objects::nonNull)
-                            .filter(s -> s != Store.YOUTUBE && s != Store.SUCCESSFUL);
-                }
-                else
-                    System.out.println(red("nothing to scrap"));
-
-                Platform.runLater(() -> {
-                    stage.setTitle("Downloading");
-                    stage.getScene().setRoot(new VBox(progressBar, status));
-                    progressBar.setProgress(0);
-                    status.setPadding(new Insets(10));
-                    stage.sizeToScene();
-                });
-
-                System.out.println("\n\n");
-                System.out.println(ANSI.createBanner("DOWNLOADING"));
-
-                List<DownloadTask> list = 
-                        Stream.concat(completedTasks.stream(), remainingStream)
-                        .flatMap(Store::toDownloadTasks)
-                        .collect(Collectors.toList());
-
-                String format3 = "remaining: %d  | total: "+list.size()+ "  | thread-count: %d%n";
-                double total3 = list.size();
-
-                list.removeIf(Objects::isNull);
-
-                if(!list.isEmpty()) {
-                    remaining.set(list.size() + 1);
-
-                    AbstractScrapper.setProgressor(() -> {
-                        int r = remaining.decrementAndGet();
-                        status.setText(String.format(format3, r, Thread.activeCount()));
-                        progressBar.setProgress((total3 - r) / total3);
-                    }, true);
-
-                    downloadStarted = true;
-                    Collections.shuffle(list);
-                    list.forEach(ex::execute);
-                    ex.execute(() -> {
-                        while(true) {
-                            if(remaining.get() == 0)
-                                System.exit(0);
-                            try {
-                                Thread.sleep(10000);
-                            } catch (InterruptedException e) {}
-                        }
-                    });
-                    ex.shutdown();
-                }
-                else {
-                    System.out.println(red("nothing to download"));
-                    System.exit(0);
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-                try {
-                    save();
-                } catch (IOException e1) {
-                    e1.printStackTrace();
-                }
+        AbstractUpdatable scrapperUpdate = new AbstractUpdatable() {
+            @Override
+            public void update() {
+                long i = latch.getCount();
+                status.setText(String.format(format2, i, threadCount.get()));
+                progressBar.setProgress((total2 - i) / total2);
             }
-        });
-        t.setDaemon(true);
-        t.start();
+        };
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        AtomicInteger totalDownload = new AtomicInteger(0);
+        AtomicInteger completedDownload = new AtomicInteger(0);
+        String format3 = "completed: %d  | total: %d | thread-count: %d%n";
+
+        AbstractUpdatable downloadUpdate = new AbstractUpdatable() {
+            @Override
+            public void update() {
+                status.setText(String.format(format3, completedDownload.get(), totalDownload.get(), threadCount.get()));
+                progressBar.setProgress(completedDownload.get() / (double)totalDownload.get());
+            }
+        };
+
+        ThreadPoolExecutor ex = new ThreadPoolExecutor(Config.THREAD_COUNT, Config.THREAD_COUNT, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>()) {
+            @Override
+            protected void afterExecute(Runnable r, Throwable t) {
+                super.afterExecute(r, t);
+                threadCount.set(getActiveCount());
+
+                if(r instanceof DownloadTask) {
+                    completedDownload.incrementAndGet();
+                    downloadUpdate.setChanged();
+                } else if(r instanceof FutureTask){
+                    latch.countDown();
+
+                    @SuppressWarnings("unchecked")
+                    FutureTask<ScrappingResult> f = (FutureTask<ScrappingResult>)r;
+                    ScrappingResult s = null;
+                    try {
+                        s = f.get();
+                    } catch (InterruptedException | ExecutionException e) {
+                        e.printStackTrace();
+                    }
+
+                    if(s == null || s == ScrappingResult.YOUTUBE || s == ScrappingResult.SUCCESSFUL)
+                        return;
+
+                    DownloadTask[] dts = s.toDownloadTasks();
+                    if(dts != null) {
+                        totalDownload.addAndGet(dts.length);
+
+                        for (DownloadTask d : dts)
+                            execute(d);
+                    }
+
+                    scrapperUpdate.setChanged();
+                    downloadUpdate.setChanged();
+                }
+            };
+        };
+
+        scrapperUpdate.update();
+        Updatables.add(scrapperUpdate);
+
+        info("\n");
+        info(ANSI.createBanner("SCRAPPING"));
+
+        Collections.shuffle(remainingTasks);
+        remainingTasks.forEach(ex::submit);
+
+        ex.execute(() -> {
+            info(red("Downloader waiting"));
             try {
-                save();
-            } catch (IOException e) {
-                System.out.println("failed to save:"+e);
+                latch.await();
+            } catch (InterruptedException e1) {
+                logger.warn(red("latch Interrupted"), e1);
                 System.exit(0);
             }
-        }));
-    }
 
+            Platform.runLater(() -> {
+                stage.setTitle("Downloading");
+                stage.getScene().setRoot(new VBox(progressBar, status));
+                progressBar.setProgress(0);
+                status.setPadding(new Insets(10));
+                stage.sizeToScene();
+
+                info("\n");
+                info(ANSI.createBanner("DOWNLOADING"));
+
+                downloadStarted = true;
+                Updatables.remove(scrapperUpdate);
+                Updatables.add(downloadUpdate);
+            });
+
+            downloadStarted = true;
+
+            int[] count = {0};
+            completedTasks.stream()
+            .map(ScrappingResult::toDownloadTasks)
+            .filter(Objects::nonNull)
+            .filter(ar -> ar.length != 0)
+            .flatMap(Stream::of)
+            .forEach(d -> {
+                count[0]++;
+                ex.execute(d);
+            });
+
+            totalDownload.addAndGet(count[0]);
+            downloadUpdate.setChanged();
+
+            Thread shutdown = new Thread(() -> {
+                try {
+                    save();
+                } catch (IOException e) {
+                    logger.error("failed to save", e);
+                    System.exit(0);
+                }
+            });
+
+            Runtime.getRuntime().addShutdownHook(shutdown);
+
+            ex.execute(() -> {
+                Thread t = new Thread(() -> {
+                    ex.shutdown();
+                    try {
+                        ex.awaitTermination(3, TimeUnit.DAYS);
+                    } catch (InterruptedException e) {
+                        logger.error("ex.awaitTermination(3, TimeUnit.DAYS); Interrupted", e);
+                    }
+                    
+                    Runtime.getRuntime().removeShutdownHook(shutdown);
+                    shutdown.start();
+                    try {
+                        stop();
+                    } catch (Exception e) {
+                        logger.error("error while stopping", e);
+                    }
+                });
+                t.setDaemon(true);
+                t.start();
+            });
+        });
+
+
+    }
+    private void info(String format, Object...obj) {
+        logger.info(format, obj);
+    }
+    private void info(String msg) {
+        logger.info(msg);
+    }
     private void showErrorAndExit(String str) {
         Alert al = new Alert(AlertType.ERROR);
         al.setHeaderText(str);
@@ -312,7 +329,7 @@ public final class MainView extends Application {
     private void save() throws IOException {
         if(!downloadStarted) {
             MyUtils.beep(5);
-            System.out.println(red("\n\nstopped at scrapping"));
+            logger.warn(red("\n\nstopped at scrapping"));
             return;
         }
 
@@ -320,77 +337,15 @@ public final class MainView extends Application {
             return;
 
         saved = true;
+        DataStore.saveClientCopy();
 
-        Map<String, Path> map = AbstractScrapper.getFailedDownloads();
-
-        writeList("failed-rss-owl.txt", AbstractScrapper.getFailed(), false);
-        writeList("failed-downlods.txt", map.keySet()
-                .stream().map(s -> s +"\t"+ (map.get(s) == null ? "" : map.get(s)))
-                .collect(Collectors.toList()),
-                false);    
-        writeList("youtube.txt", AbstractScrapper.getYoutube());
-
-        System.out.println(yellow("\nfile walking"));
-
-        try {
-            List<File> dirs = Files.walk(rootDir)
-                    .skip(1)
-                    .filter(Files::isDirectory)
-                    .map(Path::toFile)
-                    .collect(Collectors.toList());
-
-            if(!dirs.isEmpty()) {
-                for (int i = 0; i < 3; i++) {
-                    Iterator<File> iterator = dirs.iterator();
-                    while (iterator.hasNext()) {
-                        File f = iterator.next();
-                        String[] files = f.list();
-                        if(files == null)
-                            iterator.remove();
-                        else if(files.length == 1) {
-                            new File(f, files[0]).renameTo(new File(f + files[0]));
-                            try {
-                                Files.deleteIfExists(f.toPath());
-                                iterator.remove();
-                            } catch (Exception e) {}
-                        }
-                    }
-                }
-            }
-        } catch (IOException e) {
-            System.out.println(red("failed: "+MyUtils.exceptionToString(e)));
-        }
-
-        FilesUtils.openFile(rootDir.toFile());
+        FilesUtils.openFile(Config.DOWNLOAD_DIR.toFile());
         MyUtils.beep(5);
 
-        System.out.println(red("Failed: ")+AbstractScrapper.getFailed().size());
-        System.out.println(red("Download Failed: ")+AbstractScrapper.getFailedDownloads().size());
-        System.out.println("\n\n"+FINISHED_BANNER);
+        logger.info("\n\n"+FINISHED_BANNER);
     }
-
-    private void writeList(String path, Collection<String> urls) throws IOException {
-        writeList(path, urls, true);
-    }
-    private void writeList(String pathString, Collection<String> urls, boolean append) throws IOException {
-        if(urls.isEmpty()) {
-            if(!append) {
-                try {
-                    Files.deleteIfExists(rootDir.resolve(pathString));
-                } catch (IOException e) {}
-            }
-            return;
-        }
-
-        Path path = rootDir.resolve(pathString);
-        if(append)
-            Files.write(rootDir.resolve(path),  Stream.concat(Files.exists(path) ? Files.lines(path) : Stream.empty(), urls.stream()).collect(Collectors.toCollection(LinkedHashSet::new)), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-        else
-            Files.write(rootDir.resolve(path),  urls, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);    
-    }
-
     private Collection<String> inputDialog() {
-        Dialog<String> tt = new Dialog<>();
+        Dialog<ButtonType> tt = new Dialog<>();
         tt.setTitle("RSS OWL");
         TextArea ta = new TextArea();
         ta.setPrefRowCount(20);
@@ -399,7 +354,6 @@ public final class MainView extends Application {
         tt.getDialogPane().setExpanded(true);
         tt.setHeaderText("Enter Urls seperated by newline");
         tt.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-        tt.setResultConverter(b -> b == ButtonType.OK ? ta.getText() : null);
 
         /**
          * TODO 
@@ -417,7 +371,7 @@ public final class MainView extends Application {
                     try {
                         Files.deleteIfExists(path);
                         tt.getDialogPane().setContent(null);
-                        System.out.println(ANSI.red(path + " deleted"));
+                        logger.info(ANSI.red(path + " deleted"));
                         AbstractScrapper.clear();
                     } catch (IOException e1) {}    
                 });
@@ -426,20 +380,34 @@ public final class MainView extends Application {
         }
          */
 
+        Set<String> ret = new LinkedHashSet<>();
 
-        Collection<String> list = tt.showAndWait().map(strs -> 
-        Stream.of(strs.split("\r?\n"))
-        .map(s -> s.replace('"', ' ').trim())
-        .filter(s -> !s.isEmpty())
-        .collect(Collectors.toSet())).orElse(new HashSet<>()); 
+        ta.textProperty().addListener(i -> Platform.runLater(() -> {
+            String strs = ta.getText();
+            ret.clear();
 
-        if(list.isEmpty()) {
+            if(strs != null && !(strs = strs.trim()).isEmpty()) {
+                Stream.of(strs.split("\r?\n"))
+                .map(s -> s.replace('"', ' ').trim())
+                .filter(s -> !s.isEmpty())
+                .forEach(ret::add);                
+            }
+            tt.setContentText("Total: "+ret.size());
+        }));
+
+        tt.setResultConverter(b -> b);
+        Optional<ButtonType> bt = tt.showAndWait();
+        if(!bt.isPresent() || bt.get() != ButtonType.OK)
+            ret.clear();
+        else if(ret.isEmpty()) {
             Alert alert = new Alert(AlertType.ERROR);
             alert.setHeaderText("no input");
             alert.showAndWait();
-            System.exit(0);
         }
 
-        return list;
+        if(ret.isEmpty())
+            System.exit(0);
+
+        return ret;
     }
 }

@@ -1,4 +1,4 @@
-package scrapper.specials;
+package scrapper.scrapper.specials;
 
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 

@@ -92,8 +92,8 @@
     },
 	{
 	"name":"pleated-jeans",
-	"selector":"img .size-full",
-	"attr":"data-src",
+	"selector":"img.aligncenter",
+	"attr":"src",
 	"dir":"pleated-jeans"
 	}
   ]
