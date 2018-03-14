@@ -1,11 +1,9 @@
 package scrapper.scrapper;
-import static sam.console.ansi.ANSI.green;
 import static sam.console.ansi.ANSI.red;
 import static sam.console.ansi.ANSI.yellow;
 import static sam.myutils.fileutils.renamer.RemoveInValidCharFromString.removeInvalidCharsFromFileName;
 import static scrapper.scrapper.DataStore.EMPTY;
 import static scrapper.scrapper.DataStore.FAILED;
-import static scrapper.scrapper.DataStore.URL_SCRAPPING_RESULT_MAP;
 import static scrapper.scrapper.DataStore.YOUTUBE;
 
 import java.io.File;
@@ -14,8 +12,10 @@ import java.net.URL;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
@@ -30,10 +30,11 @@ import sam.myutils.fileutils.renamer.RemoveInValidCharFromString;
 import scrapper.Config;
 import scrapper.InfoBox;
 import scrapper.Utils;
-public abstract class AbstractScrapper {
+public abstract class  AbstractScrapper<E extends UrlContainer> implements Iterable<E> {
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
     static {
+        // LoggerFactory.getLogger(AbstractScrapper.class).
         System.out.println(ANSI.green("AbstractScrapper initiated"));
     }
 
@@ -55,44 +56,65 @@ public abstract class AbstractScrapper {
     public InfoBox getInfoBox() {
         return infoBox;
     }
-    public int failedCount() {
+    public final int failedCount() {
         return infoBox.getFailedCount();
     }
     public abstract boolean isEmpty();
     public abstract  int size();
     public abstract Collection<String> getUrls();
     public abstract Path getPath();
-    public Stream<Callable2> tasks() {
-        infoBox.setTotal(size());
-        return tasksCreate();
+    public final void fillTasks(List<ScrappingResult> completedTasks, List<Callable<ScrappingResult>> remainingTasks) {
+        int completed = 0;
+        int remaining = 0;
+
+        for (E c : this) {
+            ScrappingResult sr = ScrappingResult.get(c.getUrl());
+            if(sr == null) {
+                remainingTasks.add(makeTask(c));
+                remaining++;
+            }
+            else {
+                completedTasks.add(sr);
+                completed++;
+            }
+        }
+
+        infoBox.setTotal(completed + remaining);
+        infoBox.setCompleted(completed);
+
     }
-    protected abstract Stream<Callable2>  tasksCreate();
+    private Callable<ScrappingResult> makeTask(E c) {
+        Callable<ScrappingResult> task = toTask(c);
+
+        return () -> {
+            ScrappingResult sr = null; 
+            try {
+                sr = task.call();
+            } catch (InterruptedException e) {
+                throw e;
+            } catch (Exception e) {
+                urlFailed(c.getUrl(), e);
+            } finally {
+                progress(sr);
+            }
+            return sr;
+        };
+    }
+    protected abstract Callable<ScrappingResult> toTask(E c);
     public abstract void printCount(String format);
-    protected void progressCompleted() {
+    protected final void progressCompleted() {
         infoBox.progress(true);
     }
-    protected Callable2 checkSuccessful(String url) {
-        ScrappingResult s = URL_SCRAPPING_RESULT_MAP.getData().get(url);
-        if(s == null)
-            return null;
-
-        logger.info(url +"  "+green("SKIPPED"));
-        progressCompleted();
-        return new Callable2(s);
+    protected final ScrappingResult progress(ScrappingResult result) {
+        infoBox.progress(result != null);
+        return result;
     }
-    protected ScrappingResult progress(ScrappingResult store) {
-        infoBox.progress(store != null);
-
-        if(store != null)
-            URL_SCRAPPING_RESULT_MAP.getData().put(store.getUrl(), store);
-        return store;
-    }
-    protected String prepareName(org.jsoup.nodes.Document doc, URL url) {
+    protected final String prepareName(org.jsoup.nodes.Document doc, URL url) {
         return Optional.ofNullable(doc.title())
                 .map(RemoveInValidCharFromString::removeInvalidCharsFromFileName)
                 .orElseGet(() -> RemoveInValidCharFromString.removeInvalidCharsFromFileName(new File(url.getFile()).getName()));
     }
-    protected String prepareName(com.jaunt.Document doc, String url) throws MalformedURLException {
+    protected final String prepareName(com.jaunt.Document doc, String url) throws MalformedURLException {
         try {
             String name = doc.findFirst("<title>").getText();
             if(name == null)
@@ -102,11 +124,11 @@ public abstract class AbstractScrapper {
             return removeInvalidCharsFromFileName(Utils.getFileName(new URL(url)));
         }
     }
-    protected boolean testYoutube(org.jsoup.nodes.Document doc) {
+    protected final int testYoutube(org.jsoup.nodes.Document doc) {
         return testYoutube(doc.getElementsByTag("iframe").stream()
                 .map(e -> e.attr("src")));
     }
-    protected boolean testYoutube(com.jaunt.Document doc) {
+    protected final int testYoutube(com.jaunt.Document doc) {
         Stream.Builder<String> b = Stream.builder();
 
         for (Element e : doc.findEach("<iframe>")) {
@@ -116,8 +138,8 @@ public abstract class AbstractScrapper {
         }
         return testYoutube(b.build());
     }
-    private boolean testYoutube(Stream<String> stream) {
-        int size = YOUTUBE.getData().size();
+    private final int testYoutube(Stream<String> stream) {
+        int[] count = {0};
 
         stream
         .filter(Objects::nonNull)
@@ -129,9 +151,12 @@ public abstract class AbstractScrapper {
             } catch (MalformedURLException e) {}
             return false;
         })
-        .forEach(YOUTUBE.getData()::add);
+        .forEach(s -> {
+            YOUTUBE.add(s);
+            count[0]++;
+        });
 
-        return size != YOUTUBE.getData().size();
+        return count[0];
     }
     /**
      * 
@@ -139,7 +164,7 @@ public abstract class AbstractScrapper {
      * @param testAgainst
      * @param actionOnMatch calls the consumer as (url, name) -> {}
      */
-    protected static void urlsFilter(Class<? extends AbstractScrapper> cls, Collection<String> urls, Collection<String> testAgainst, BiConsumer<String, String> actionOnMatch) {
+    protected static void urlsFilter(Class<? extends AbstractScrapper<?>> cls, Collection<String> urls, Collection<String> testAgainst, BiConsumer<String, String> actionOnMatch) {
         Iterator<String> itr = urls.iterator();
 
         while(itr.hasNext()){
@@ -159,7 +184,7 @@ public abstract class AbstractScrapper {
                     if(part.contains(name)){
                         if(Config.DISABLED_SCRAPPERS.contains(name)) {
                             logger.info(red("disabled: ")+url);
-                            DataStore.DISABLED.getData().add(url);
+                            DataStore.DISABLED.add(url);
                         }
                         else
                             actionOnMatch.accept(url, name);
@@ -170,13 +195,16 @@ public abstract class AbstractScrapper {
             }
         }
     }
-    protected void warn(String msg, Throwable e) {
+    protected final void warn(String msg, Throwable e) {
         logger.warn(msg, e);
     }
     private static final String format = "{}  " + yellow("({})"); 
-    protected void urlSucess(String url, int size) {
-        if(size > 0)
+    protected final void urlSucess(String url, int size) {
+        if(size > 0) {
             logger.info(format, url, size);
+            DataStore.FAILED.remove(url);
+            DataStore.EMPTY.remove(url);
+        }
         else
             urlEmpty(url);
     }
@@ -185,16 +213,13 @@ public abstract class AbstractScrapper {
      * @param url
      * @param error
      */
-    protected void urlFailed(String url, Throwable error) {
-        urlError(red(url), error);
-        FAILED.getData().add(url);
+    protected final void urlFailed(String url, Throwable error) {
+        warn(red(url), error);
+        FAILED.add(url);
     }
     private static final String formatEmpty = "{}  " + red(" EMPTY");
-    protected void urlEmpty(String url) {
+    protected final void urlEmpty(String url) {
         logger.warn(formatEmpty, url);
-        EMPTY.getData().add(url);
-    }
-    private void urlError(String url, Throwable error) {
-        warn("url: "+url, error);
+        EMPTY.add(url);
     }
 }

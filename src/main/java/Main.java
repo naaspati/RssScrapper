@@ -24,7 +24,7 @@ import scrapper.MainView;
 public class Main {
     public static void main(String[] args) throws Exception {
         if(args.length == 1 && args[0].equals("-v")) {
-            System.out.println("1.004");
+            System.out.println("1.005");
             System.exit(0);
         }
         

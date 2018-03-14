@@ -7,8 +7,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,9 +19,9 @@ import com.json.parsers.JSONParser;
 import sam.console.ansi.ANSI;
 import scrapper.Config;
 import scrapper.scrapper.AbstractScrapper;
-import scrapper.scrapper.Callable2;
-import scrapper.scrapper.ScrappingResult;
-public abstract class Commons extends AbstractScrapper {
+import scrapper.scrapper.UrlContainer;
+import scrapper.scrapper.commons.Commons.CommonEntry.CommonEntryUrlContainer;
+public abstract class Commons extends AbstractScrapper<CommonEntryUrlContainer> {
     public static List<Commons> get(Collection<String> urls) throws IOException {
         return Stream.of(new CommonsJSoup(urls), new CommonsJaunt(urls))
                 .filter(c -> !c.commonEntries.isEmpty())
@@ -46,51 +46,35 @@ public abstract class Commons extends AbstractScrapper {
     }
 
     @Override
-    public  boolean isEmpty() {
+    public  final boolean isEmpty() {
         return commonEntries.isEmpty();
     }
     @Override
-    public  int size() {
+    public  final int size() {
         return commonEntries.stream().mapToInt(c -> c.urls.size()).sum();
     }
     @Override    
-    public Collection<String> getUrls() {
+    public final Collection<String> getUrls() {
         return commonEntries.stream().flatMap(c -> c.urls.stream()).collect(toList());
     }
 
     @Override
-    public Path getPath() {
+    public final Path getPath() {
         return root;
     }
 
     @Override
-    public void printCount(String format) {
+    public final void printCount(String format) {
         logger.info(String.format(format, getClass().getSimpleName(), size()));
         commonEntries.forEach(c -> logger.info(String.format("  "+format, c.name, c.urls.size())));
     }
+
     @Override
-    protected Stream<Callable2> tasksCreate() {
+    public Iterator<CommonEntryUrlContainer> iterator() {
         return commonEntries.stream()
-                .flatMap(c ->
-                c.urls.stream()
-                .map(url -> {
-                    Callable2 s = checkSuccessful(url);
-                    if(s != null)
-                        return s;
-
-                    return new Callable2(() -> progress(scrap(c, url)));
-                }));
+                .flatMap(CommonEntry::toUrls)
+                .iterator();
     }
-    private ScrappingResult scrap(CommonEntry c, String url) {
-        try {
-            return _scrap(c, url);
-        } catch (Exception e) {
-            urlFailed(url, e);
-        }
-        return null;
-    }
-    protected abstract ScrappingResult _scrap(CommonEntry c, String url) throws Exception ;
-
     protected class CommonEntry {
         final String name, selector, attr;
         final Path dir;
@@ -111,7 +95,19 @@ public abstract class Commons extends AbstractScrapper {
                 warn(ANSI.red("failed to create dir: ")+dir, e);
                 System.exit(0);
             }
-            urls = Collections.synchronizedCollection(new HashSet<>());
+            urls = new HashSet<>();
+        }
+
+        public Stream<CommonEntryUrlContainer> toUrls() {
+            return urls.stream().map(CommonEntryUrlContainer::new);
+        }
+        public class CommonEntryUrlContainer extends UrlContainer {
+            public CommonEntryUrlContainer(String url) {
+                super(url);
+            }
+            public CommonEntry getParent(){
+                return CommonEntry.this;
+            }
         }
 
         public boolean skipDownload(String url) {

@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -15,14 +16,13 @@ import java.util.stream.Stream;
 
 import scrapper.Config;
 import scrapper.scrapper.AbstractScrapper;
-import scrapper.scrapper.Callable2;
-import scrapper.scrapper.ScrappingResult;
-public abstract class Specials extends AbstractScrapper {
+import scrapper.scrapper.UrlContainer;
+public abstract class Specials extends AbstractScrapper<UrlContainer> {
 
-    public static Collection<AbstractScrapper> get(Collection<String> urls)  throws InstantiationException, IllegalAccessException, URISyntaxException, IOException{
+    public static Collection<AbstractScrapper<UrlContainer>> get(Collection<String> urls)  throws InstantiationException, IllegalAccessException, URISyntaxException, IOException{
         Map<String, Class<? extends Specials>> map = Stream.of(CodePen.class, FailBlog.class, UFunk.class)//, PLEATED_JEANS.class)
                 .collect(toMap(c -> ((Details)c.getAnnotation(Details.class)).value(), Function.identity())); 
-                
+
         Map<String, Specials> map2 = new LinkedHashMap<>();
 
         urlsFilter(Specials.class, urls, map.keySet(), (url, name) -> {
@@ -63,26 +63,10 @@ public abstract class Specials extends AbstractScrapper {
         this.urls = Collections.synchronizedSet(new HashSet<>());
     }
     @Override
-    protected Stream<Callable2> tasksCreate() {
-        return urls.stream()
-                .map(url -> {
-                    Callable2 s = checkSuccessful(url);
-                    if(s != null)
-                        return s;
-                    return new Callable2(() -> progress(scrap(url)));
-                });
+    public Iterator<UrlContainer> iterator() {
+        return getUrls().stream().map(UrlContainer::new).iterator();
     }
-    
-    private ScrappingResult scrap(String url) {
-        try {
-            return _scrap(url);
-        } catch (Exception e) {
-            urlFailed(url, e);
-        }
-        return null;
-    }
-    protected abstract ScrappingResult _scrap(String url) throws Exception ;
-    
+
     @Override
     public Path getPath() {
         return path;

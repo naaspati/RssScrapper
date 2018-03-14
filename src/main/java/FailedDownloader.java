@@ -13,7 +13,7 @@ import sam.console.ansi.ANSI;
 import sam.myutils.myutils.MyUtils;
 import scrapper.Config;
 import scrapper.scrapper.DataStore;
-import scrapper.scrapper.DownloadTask;
+import scrapper.scrapper.ScrappingResult;
 
 public class FailedDownloader {
     
@@ -24,18 +24,14 @@ public class FailedDownloader {
             logger.error(red("file not found: ")+Config.DOWNLOAD_DIR);
             return;
         }
-        if(DataStore.FAILED_DOWNLOADS.getData().isEmpty()){
+        if(!ScrappingResult.hasFailed()){
             logger.info(red("no failed found "));
             return;
         }
         
         ExecutorService ex = Executors.newFixedThreadPool(Config.THREAD_COUNT);
         
-        DataStore.FAILED_DOWNLOADS_MAP.getData()
-        .values().stream()
-        .flatMap(m -> m.values().stream())
-        .map(DownloadTask::new)
-        .forEach(ex::execute);
+        ScrappingResult.keys().forEach(s -> s.startDownload(ex));
 
         ex.shutdown();
         try {

@@ -70,4 +70,7 @@ public final class InfoBox extends BorderPane  implements Updatable {
             
         setChanged(true);
     }
+    public void setCompleted(int completed) {
+        progress.set(completed);
+    }
 }
