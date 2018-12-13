@@ -1,13 +1,15 @@
 package scrapper;
 import static java.util.stream.Collectors.toCollection;
-import static sam.console.ansi.ANSI.FINISHED_BANNER;
-import static sam.console.ansi.ANSI.cyan;
-import static sam.console.ansi.ANSI.green;
-import static sam.console.ansi.ANSI.red;
-import static sam.console.ansi.ANSI.yellow;
+import static sam.console.ANSI.FINISHED_BANNER;
+import static sam.console.ANSI.cyan;
+import static sam.console.ANSI.green;
+import static sam.console.ANSI.red;
+import static sam.console.ANSI.yellow;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -15,14 +17,15 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+
+
+
+
+
+
+
+
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -45,9 +48,8 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import sam.console.ansi.ANSI;
-import sam.myutils.fileutils.FilesUtils;
-import sam.myutils.myutils.MyUtils;
+import sam.console.ANSI;
+import sam.myutils.MyUtils;
 import scrapper.scrapper.AbstractScrapper;
 import scrapper.scrapper.DataStore;
 import scrapper.scrapper.ScrappingResult;
@@ -82,7 +84,7 @@ public final class MainView extends Application {
         MainView.stage = stage;
 
         boolean isDownload = getParameters().getRaw().contains("--download");
-        final Collection<String> urls =  isDownload ? null : inputDialog();
+        final Collection<String> urls =  isDownload ? null : System.getProperty("urls-file") == null ? inputDialog() : Files.lines(Paths.get(System.getProperty("urls-file"))).distinct().collect(Collectors.toList());
 
         infoBoxes.setPrefColumns(3);
         infoBoxes.setAlignment(Pos.CENTER);
@@ -150,39 +152,36 @@ public final class MainView extends Application {
         scrappers.stream().map(AbstractScrapper::getInfoBox)
         .collect(toCollection(infoBoxes::getChildren));
 
-        String format2 = "remaining: %d  | total: "+total+ "  | thread-count: %d%n";
-        final double total2 = total;
+        String format2 = "remaining: %d  | total: "+total;
         CountDownLatch latch = new CountDownLatch(remainingTasks.size());
 
         stage.setTitle("Scrapping");
-        AtomicInteger threadCount = new AtomicInteger(0);
 
         AbstractUpdatable scrapperUpdate = new AbstractUpdatable() {
             @Override
             public void update() {
                 long i = latch.getCount();
-                status.setText(String.format(format2, i, threadCount.get()));
-                progressBar.setProgress((total2 - i) / total2);
+                status.setText(String.format(format2, i));
+                progressBar.setProgress((total - i) / total);
             }
         };
 
         AtomicInteger totalDownload = new AtomicInteger(0);
         AtomicInteger completedDownload = new AtomicInteger(0);
-        String format3 = "completed: %d  | total: %d | thread-count: %d%n";
+        String format3 = "completed: %d  | total: %d";
 
         AbstractUpdatable downloadUpdate = new AbstractUpdatable() {
             @Override
             public void update() {
-                status.setText(String.format(format3, completedDownload.get(), totalDownload.get(), threadCount.get()));
+                status.setText(String.format(format3, completedDownload.get(), totalDownload.get()));
                 progressBar.setProgress(completedDownload.get() / (double)totalDownload.get());
             }
         };
 
-        threadPool = new ThreadPoolExecutor(Config.THREAD_COUNT, Config.THREAD_COUNT, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>()) {
+        threadPool = new ThreadPoolExecutor(EnvConfig.THREAD_COUNT, EnvConfig.THREAD_COUNT, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>()) {
             @Override
             protected void afterExecute(Runnable r, Throwable t) {
                 super.afterExecute(r, t);
-                threadCount.set(getActiveCount());
 
                 if(r instanceof DownloadTask) {
                     completedDownload.incrementAndGet();
@@ -233,7 +232,8 @@ public final class MainView extends Application {
                 stage.getScene().setRoot(new VBox(progressBar, status));
                 progressBar.setProgress(0);
                 status.setPadding(new Insets(10));
-                stage.sizeToScene();
+                stage.setWidth(200);
+                stage.setHeight(100);
 
                 info("\n");
                 info(ANSI.createBanner("DOWNLOADING"));
@@ -271,6 +271,7 @@ public final class MainView extends Application {
                     System.out.println(ANSI.yellow("finishing"));
                     threadPool.shutdown();
                     try {
+                        System.out.println(red("waiting to terminate: ")+threadPool.getActiveCount());
                         threadPool.awaitTermination(3, TimeUnit.DAYS);
                     } catch (InterruptedException e) {
                         logger.error("ex.awaitTermination(3, TimeUnit.DAYS); Interrupted", e);
@@ -278,9 +279,8 @@ public final class MainView extends Application {
 
                     Runtime.getRuntime().removeShutdownHook(shutdown);
                     finish.run();
-                    stage.hide();
+                    Platform.runLater(stage::hide);
                 });
-                t.setDaemon(true);
                 t.start();
             });
         });
@@ -313,7 +313,7 @@ public final class MainView extends Application {
         saved = true;
         DataStore.saveClientCopy();
 
-        FilesUtils.openFile(Config.DOWNLOAD_DIR.toFile());
+        Utils.openFile(EnvConfig.DOWNLOAD_DIR.toFile());
         MyUtils.beep(5);
 
         logger.info("\n\n"+FINISHED_BANNER);

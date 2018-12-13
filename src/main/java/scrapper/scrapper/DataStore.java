@@ -2,8 +2,8 @@ package scrapper.scrapper;
 
 import static java.util.stream.Collectors.collectingAndThen;
 import static java.util.stream.Collectors.toMap;
-import static sam.string.stringutils.StringUtils.contains;
-import static sam.string.stringutils.StringUtils.split;
+import static sam.string.StringUtils.contains;
+import static sam.string.StringUtils.split;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -18,24 +18,27 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
+
+
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import sam.console.ansi.ANSI;
-import scrapper.Config;
+import sam.console.ANSI;
+import scrapper.EnvConfig;
 
 public final class DataStore<E extends Collection<String>> {
-    public static final DataStore<List<String>> FAILED;
+    public static final DataStore<List<String>> URL_FAILED;
     public static final DataStore<List<String>> EMPTY;
     public static final DataStore<List<String>> YOUTUBE;
     public static final DataStore<List<String>> DISABLED;
 
     public static final DataStore<Set<String>> BAD_URLS;
+
 
     /**
      * content-type -> file.ext 
@@ -48,7 +51,7 @@ public final class DataStore<E extends Collection<String>> {
         Function<List<String>, List<String>> mapper =  list -> list;
 
         BAD_URLS = parse("bad_urls", HashSet::new);
-        FAILED = parse("failed", mapper);
+        URL_FAILED = parse("url_failed", mapper);
         EMPTY = parse("empty", mapper);
         YOUTUBE = parse("youtube", mapper);
         DISABLED = parse("disabled", mapper);
@@ -87,7 +90,7 @@ public final class DataStore<E extends Collection<String>> {
                 return;
             }
 
-            for (DataStore<Collection<String>> d : new DataStore[] {FAILED, EMPTY, YOUTUBE,DISABLED, BAD_URLS }) {
+            for (DataStore<Collection<String>> d : new DataStore[] {URL_FAILED, EMPTY, YOUTUBE,DISABLED, BAD_URLS }) {
                 try {
                     Files.write(savePath(d.key), d.data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
                 } catch (IOException e) {
@@ -118,12 +121,20 @@ public final class DataStore<E extends Collection<String>> {
         try {
             writeLock.lock();
 
-            Path root = Config.DOWNLOAD_DIR;
+            Path root = EnvConfig.DOWNLOAD_DIR;
 
             Logger logger = LoggerFactory.getLogger(DataStore.class);
             logger.info("\n"+ANSI.createBanner("SUMMERY"));
 
-            for (DataStore<Collection<String>> d : new DataStore[] {BAD_URLS, FAILED, EMPTY, YOUTUBE, DISABLED}) {
+            List<String> list = ScrappingResult.keys()
+                    .stream()
+                    .flatMap(s -> s.failedTasks())
+                    .map(s -> s == null ? null : s.getUrl())
+                    .collect(Collectors.toList());
+            
+            list.removeIf(Objects::isNull);
+
+            for (DataStore<Collection<String>> d : new DataStore[] {BAD_URLS, new DataStore<>(list, "download_failed"), URL_FAILED, EMPTY, YOUTUBE, DISABLED}) {
                 Path p = root.resolve(d.key+".txt");
                 try {
                     if(d.data.isEmpty())
@@ -160,8 +171,10 @@ public final class DataStore<E extends Collection<String>> {
         this.data = data;
         this.key = key;
     }
-    public synchronized void add(String s) {
-        data.add(s);
+    public void add(String s) {
+        synchronized (data) {
+            data.add(s);
+        }
     }
     public String getKey() {
         return key;
@@ -170,11 +183,14 @@ public final class DataStore<E extends Collection<String>> {
         return MIME_EXT_MAP.get(mime);
     }
 
-    public synchronized void addAll(Collection<String> urls) {
-        data.addAll(urls);
+    public void addAll(Collection<String> urls) {
+        synchronized (data) {
+            data.addAll(urls);            
+        }
     }
-
-    public synchronized void remove(String url) {
-        data.remove(url);
+    public void remove(String url) {
+        synchronized (data) {
+            data.remove(url);
+        }
     }
 }

@@ -1,5 +1,7 @@
 package scrapper;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.URL;
 
 public interface Utils {
@@ -15,4 +17,7 @@ public interface Utils {
         return s.substring(start + 1, end);
     }
 
+    public static void openFile(File file) throws IOException {
+        Runtime.getRuntime().exec("explorer \""+file.getName()+"\"", null, file.getParentFile());
+    }
 }

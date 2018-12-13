@@ -5,10 +5,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.Callable;
 
-import com.jaunt.Element;
-import com.jaunt.Elements;
+
+
+
 
 import scrapper.scrapper.ScrappingResult;
 import scrapper.scrapper.UserAgentHandler;

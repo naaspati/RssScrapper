@@ -11,14 +11,10 @@ repositories {
     jcenter()
 }
 dependencies {
-   compile files(
-      'myutils.jar',
-      /C:\Users\Sameer\Documents\MEGA\eclipse_workplace\imports\jaunt\jaunt.jar/,
-      /C:\Users\Sameer\Documents\MEGA\eclipse_workplace\imports\quick-json-1.0.2.3.jar/
-    )
-    compile group: 'org.slf4j', name: 'slf4j-jdk14', version: '1.8.0-beta1'
-   compile group: 'org.jsoup', name: 'jsoup', version: '1.10.3'
-   testCompile 'junit:junit:4.12'
+   compile files( 'myutils.jar' )
+   compile 'org.slf4j:slf4j-jdk14:1.8.0-beta1'
+   compile 'org.jsoup:jsoup:+'
+   compile 'org.json:json:20180813'
 }
 
 task loggingCopy {
@@ -41,7 +37,7 @@ installDist.dependsOn << loggingCopy
 
 
 task copyJaunt(type: Copy){
-  from file(/C:\Users\Sameer\Documents\MEGA\eclipse_workplace\imports\jaunt\jaunt.jar/)
+  from file(/C:\Users\anie\Documents\MEGA\eclipse_workplace\imports\jaunt\jaunt.jar/)
   into file("${installDist.destinationDir}/lib")
 }
 

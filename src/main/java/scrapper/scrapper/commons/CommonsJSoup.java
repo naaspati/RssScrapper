@@ -7,13 +7,13 @@ import java.net.URL;
 import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.Callable;
 
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.select.Elements;
 
-import scrapper.Config;
+
+
+
+
+import scrapper.EnvConfig;
 import scrapper.scrapper.ScrappingResult;
 import scrapper.scrapper.commons.Commons.CommonEntry.CommonEntryUrlContainer;
 public class CommonsJSoup extends Commons {
@@ -27,7 +27,7 @@ public class CommonsJSoup extends Commons {
             CommonEntry c = ce.getParent();
             
             URL url = new URL(urlString);
-            Document doc = Jsoup.parse(url, (int) Config.CONNECT_TIMEOUT);
+            Document doc = Jsoup.parse(url, (int) EnvConfig.CONNECT_TIMEOUT);
             Elements list = doc.select(c.selector);
 
             if(list.isEmpty()){

@@ -16,8 +16,8 @@ import java.util.stream.Stream;
 
 import com.json.parsers.JSONParser;
 
-import sam.console.ansi.ANSI;
-import scrapper.Config;
+import sam.console.ANSI;
+import scrapper.EnvConfig;
 import scrapper.scrapper.AbstractScrapper;
 import scrapper.scrapper.UrlContainer;
 import scrapper.scrapper.commons.Commons.CommonEntry.CommonEntryUrlContainer;
@@ -29,7 +29,7 @@ public abstract class Commons extends AbstractScrapper<CommonEntryUrlContainer> 
     }
 
     protected final List<CommonEntry> commonEntries;
-    private final Path root = Config.DOWNLOAD_DIR.resolve("commons");
+    private final Path root = EnvConfig.DOWNLOAD_DIR.resolve("commons");
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
     protected Commons(Collection<String> list, Path path) throws IOException {
@@ -85,7 +85,7 @@ public abstract class Commons extends AbstractScrapper<CommonEntryUrlContainer> 
         public CommonEntry(Map<String, Object> map) {
             this.name = (String)map.get("name");
             this.selector = (String)map.get("selector");
-            this.dir = Optional.ofNullable((String)map.get("dir")).map(Config.DOWNLOAD_DIR::resolve).orElse(root);
+            this.dir = Optional.ofNullable((String)map.get("dir")).map(EnvConfig.DOWNLOAD_DIR::resolve).orElse(root);
             this.attr = (String)map.getOrDefault("attr", "src");
             this.removeIf = (Collection<String>) map.getOrDefault("remove-if", new ArrayList<>());
 

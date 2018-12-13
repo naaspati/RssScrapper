@@ -6,14 +6,14 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 
-import scrapper.Config;
+
+
+
+import scrapper.EnvConfig;
 
 public class BufferHandler extends ResourceHandler<byte[]> {
-    private static final LinkedBlockingQueue<byte[]> resources = new LinkedBlockingQueue<>(Config.THREAD_COUNT);
+    private static final LinkedBlockingQueue<byte[]> resources = new LinkedBlockingQueue<>(EnvConfig.THREAD_COUNT);
     private static final AtomicInteger count = new AtomicInteger();
 
    public BufferHandler() throws InterruptedException {

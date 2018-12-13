@@ -1,12 +1,13 @@
 package scrapper.scrapper;
-import static sam.console.ansi.ANSI.red;
-import static sam.console.ansi.ANSI.yellow;
-import static sam.myutils.fileutils.renamer.RemoveInValidCharFromString.removeInvalidCharsFromFileName;
+import static sam.console.ANSI.red;
+import static sam.console.ANSI.yellow;
+import static sam.fileutils.RemoveInValidCharFromString.removeInvalidCharsFromFileName;
 import static scrapper.scrapper.DataStore.EMPTY;
-import static scrapper.scrapper.DataStore.FAILED;
+import static scrapper.scrapper.DataStore.URL_FAILED;
 import static scrapper.scrapper.DataStore.YOUTUBE;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Path;
@@ -15,26 +16,21 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.Callable;
+
 import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.jaunt.Element;
-import com.jaunt.NotFound;
-
-import sam.console.ansi.ANSI;
-import sam.myutils.fileutils.renamer.RemoveInValidCharFromString;
-import scrapper.Config;
+import sam.console.ANSI;
+import scrapper.EnvConfig;
 import scrapper.InfoBox;
 import scrapper.Utils;
 public abstract class  AbstractScrapper<E extends UrlContainer> implements Iterable<E> {
-    protected final Logger logger = LoggerFactory.getLogger(getClass());
+    protected Logger logger = LoggerFactory.getLogger(getClass());
 
     static {
-        // LoggerFactory.getLogger(AbstractScrapper.class).
         System.out.println(ANSI.green("AbstractScrapper initiated"));
     }
 
@@ -70,7 +66,9 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
         for (E c : this) {
             ScrappingResult sr = ScrappingResult.get(c.getUrl());
             if(sr == null) {
-                remainingTasks.add(makeTask(c));
+                Callable<ScrappingResult> s = makeTask(c);
+                if(s == null) continue;
+                remainingTasks.add(s);
                 remaining++;
             }
             else {
@@ -85,6 +83,8 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
     }
     private Callable<ScrappingResult> makeTask(E c) {
         Callable<ScrappingResult> task = toTask(c);
+        
+        if(task == null) return null;
 
         return () -> {
             ScrappingResult sr = null; 
@@ -105,6 +105,12 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
     protected final void progressCompleted() {
         infoBox.progress(true);
     }
+    protected Document jsoup(URL url) throws IOException {
+        return Jsoup.parse(url, EnvConfig.CONNECT_TIMEOUT);
+    }
+    protected Document jsoup(String url) throws IOException {
+        return jsoup(new URL(url));
+    }
     protected final ScrappingResult progress(ScrappingResult result) {
         infoBox.progress(result != null);
         return result;
@@ -116,7 +122,7 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
     }
     protected final String prepareName(com.jaunt.Document doc, String url) throws MalformedURLException {
         try {
-            String name = doc.findFirst("<title>").getText();
+            String name = doc.findFirst("<title>").innerText();
             if(name == null)
                 throw new NullPointerException();
             return  removeInvalidCharsFromFileName(name);
@@ -182,7 +188,7 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
 
                 for (String name : testAgainst) {
                     if(part.contains(name)){
-                        if(Config.DISABLED_SCRAPPERS.contains(name)) {
+                        if(EnvConfig.DISABLED_SCRAPPERS.contains(name)) {
                             logger.info(red("disabled: ")+url);
                             DataStore.DISABLED.add(url);
                         }
@@ -202,7 +208,7 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
     protected final void urlSucess(String url, int size) {
         if(size > 0) {
             logger.info(format, url, size);
-            DataStore.FAILED.remove(url);
+            DataStore.URL_FAILED.remove(url);
             DataStore.EMPTY.remove(url);
         }
         else
@@ -215,7 +221,7 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
      */
     protected final void urlFailed(String url, Throwable error) {
         warn(red(url), error);
-        FAILED.add(url);
+        URL_FAILED.add(url);
     }
     private static final String formatEmpty = "{}  " + red(" EMPTY");
     protected final void urlEmpty(String url) {

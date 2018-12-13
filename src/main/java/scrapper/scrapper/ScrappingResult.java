@@ -1,10 +1,10 @@
 package scrapper.scrapper;
 
-import static sam.console.ansi.ANSI.red;
-import static sam.console.ansi.ANSI.yellow;
-import static sam.string.stringutils.StringUtils.contains;
-import static scrapper.Config.CONNECT_TIMEOUT;
-import static scrapper.Config.READ_TIMEOUT;
+import static sam.console.ANSI.red;
+import static sam.console.ANSI.yellow;
+import static sam.string.StringUtils.contains;
+import static scrapper.EnvConfig.CONNECT_TIMEOUT;
+import static scrapper.EnvConfig.READ_TIMEOUT;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -22,43 +22,53 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ExecutorService;
+
+
+
+
+import java.util.function.Consumer;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import sam.console.ansi.ANSI;
-import scrapper.Config;
+import sam.console.ANSI;
+import scrapper.EnvConfig;
 import scrapper.Utils;
 
 
 public class ScrappingResult {
-    private static final ConcurrentHashMap<String, ScrappingResult> DATA;
+    private static final ConcurrentHashMap<String, ScrappingResult> DATA = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Boolean> EXISTING = new ConcurrentHashMap<>();
 
     public static ScrappingResult get(String url) {
         return DATA.get(url);
     }
-    public static ScrappingResult create(String pageUrl, List<String> childrenUrls, Path folder) {
-        ScrappingResult sr = new ScrappingResult(pageUrl, childrenUrls, folder);
+    public static ScrappingResult create(String pageUrl, List<String> list, Path folder) {
+        list.removeIf(t -> t == null || t.trim().isEmpty() || EXISTING.putIfAbsent(t, true) != null);
+
+        ScrappingResult sr = new ScrappingResult(pageUrl, list, folder);
         DATA.put(pageUrl, sr);
         return sr;
     }
-    
     public static Collection<ScrappingResult> keys() {
         return DATA.values();
     }
-    
+
     static {
+        read();
+        addShutdownHook();
+    }
+
+    private static void read() {
         Path p = Paths.get("app_data/ScrappingResult.dat");
-        if(Files.notExists(p)) {
-            DATA = new ConcurrentHashMap<>();
-        } else {
+        if(Files.exists(p)) {
             try(InputStream is = Files.newInputStream(p, StandardOpenOption.READ);
-                    DataInputStream dis = new DataInputStream(is)) {
-                DATA = new ConcurrentHashMap<>();
+                    GZIPInputStream gis = new GZIPInputStream(is);
+                    DataInputStream dis = new DataInputStream(gis)) {
 
                 int size = dis.readInt();
                 for (int i = 0; i < size; i++) {
@@ -67,64 +77,119 @@ public class ScrappingResult {
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
-            }    
+            }
         }
-        p = null;
+    }
+
+    private static void addShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            Path p2 = Paths.get("app_data/ScrappingResult.dat");
+            Path p = Paths.get("app_data/ScrappingResult.dat");
             try {
                 if(DATA.isEmpty())
-                    Files.deleteIfExists(p2);
+                    Files.deleteIfExists(p);
                 else {
-                    Files.createDirectories(p2.getParent());
-                    try(OutputStream os = Files.newOutputStream(p2, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
-                            DataOutputStream dos = new DataOutputStream(os)) {
-                        List<ScrappingResult> list = new ArrayList<>(DATA.values());
+                    Files.createDirectories(p.getParent());
+                    
+                    try(OutputStream os = Files.newOutputStream(p, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+                            GZIPOutputStream gos = new GZIPOutputStream(os);
+                            DataOutputStream dos = new DataOutputStream(gos)) {
                         
+                        List<ScrappingResult> list = new ArrayList<>(DATA.values());
+
                         dos.writeInt(list.size());
                         for (ScrappingResult sr : list) 
                             sr.write(dos);
-                        
+
                         LoggerFactory.getLogger(ScrappingResult.class)
-                        .info(ANSI.green("created: ")+p2);
+                        .info(ANSI.green("created: ")+p);
                     }
-                    
+
                 }
             } catch (IOException e) {
                 LoggerFactory.getLogger(ScrappingResult.class)
-                .error("failed to save:"+p2, e);
+                .error("failed to save:"+p, e);
             }
         }));
     }
+
+    private static final String END_MARKER = "\0\0\0END\0\0\0"; 
+    private void write(DataOutputStream dos) throws IOException {
+        dos.writeUTF(pageUrl);
+        dos.writeUTF(folder.toString());
+        dos.writeBoolean(toParent);
+
+        int count[] = {0};
+        forEach(d -> count[0]++);
+
+        dos.writeInt(count[0]);
+
+        if(count[0] == 0)
+            return;
+
+        int t = count[0];
+        count[0] = 0;
+
+        forEach(d -> {
+            try {
+                count[0]++;
+                dos.writeUTF(d.urlString);
+                dos.writeBoolean(d.name != null);
+                if(d.name != null)
+                    dos.writeUTF(d.name);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        if(count[0] != t)
+            dos.writeUTF(END_MARKER); // null safety
+    } 
+    public ScrappingResult(DataInputStream dis) throws IOException {
+        this.pageUrl = dis.readUTF();
+        this.folder = Paths.get(dis.readUTF());
+        this.toParent = dis.readBoolean();
+
+        int size = dis.readInt();
+
+        if(size == 0) {
+            this.tasks = new AtomicReferenceArray<>(0);
+        } else {
+            this.tasks = new AtomicReferenceArray<>(size);
+
+            for (int n = 0; n < size; n++) {
+                String url = dis.readUTF();
+
+                if(url.equals(END_MARKER))
+                    break;
+
+                String name = dis.readBoolean() ? dis.readUTF() : null;
+                tasks.set(n, new DownloadTask(url, name, n));
+            }
+        }
+    }
+
     static String failedTaskLog() {
         StringBuilder sb = new StringBuilder();
         DATA.values().forEach(sr -> sr.appendFailedLog(sb));
         return sb.length() == 0 ? null : sb.toString();
     }
-    
+
     public static boolean hasFailed() {
         return DATA.values().stream().anyMatch(ScrappingResult::_hasFailed);
     }
     private void appendFailedLog(StringBuilder sb) {
-        synchronized (tasks) {
-            int length = sb.length();
-            boolean appended = false;
-            sb.append(folder).append('\n');
-            
-            for (DownloadTask d : tasks) {
-                if(d != null) {
-                    appended = true;
-                    sb.append("  ").append(d.urlString).append('\n');
-                }
-            }
-            if(!appended)
-                sb.setLength(length);
-        }
+        int length = sb.length();
+        sb.append(folder).append('\n');
+        int length2 = sb.length();
+
+        forEach(d -> sb.append("  ").append(d.urlString).append('\n'));
+
+        if(sb.length() == length2)
+            sb.setLength(length);
     }
 
     private final String pageUrl;
     private final boolean toParent;
-    private final DownloadTask[] tasks;
+    private final AtomicReferenceArray<DownloadTask> tasks;
     private final Path folder;
 
     private ScrappingResult(String pageUrl, List<String> childrenUrls, Path folder) {
@@ -143,63 +208,46 @@ public class ScrappingResult {
     private boolean _hasFailed() {
         return Stream.of(tasks).anyMatch(Objects::nonNull);
     }
-    private DownloadTask[] createTasks(List<String> urls) {
+    private AtomicReferenceArray<DownloadTask> createTasks(List<String> urls) {
         DownloadTask[] ts = new DownloadTask[urls.size()];
 
-        for (int i = 0; i < ts.length; i++) {
+        for (int i = 0; i < ts.length; i++)
             ts[i] = new DownloadTask(urls.get(i), i);
-        }
-        return ts;
+        return new AtomicReferenceArray<DownloadTask>(ts);
     }
-    private ScrappingResult(DataInputStream dis) throws IOException {
-        this.pageUrl = dis.readUTF();
-        this.folder = Paths.get(dis.readUTF());
-        this.toParent = dis.readBoolean();
-        
-        int size = dis.readInt();
-        this.tasks = new DownloadTask[size];
 
-        for (int i = 0; i < tasks.length; i++)
-            tasks[i] = new DownloadTask(dis, i);
+    public ScrappingResult(String pageUrl, boolean toParent, AtomicReferenceArray<DownloadTask> tasks, Path folder) {
+        this.pageUrl = pageUrl;
+        this.toParent = toParent;
+        this.tasks = tasks;
+        this.folder = folder;
     }
-    private void write(DataOutputStream dos) throws IOException {
-        dos.writeUTF(pageUrl);
-        dos.writeUTF(folder.toString());
-        dos.writeBoolean(toParent);
-
-        synchronized (tasks) {
-            int count = 0;
-            
-            for (DownloadTask d : tasks) {
-                if(d != null)
-                    count++;
-            }
-            
-            dos.writeInt(count);
-            for (DownloadTask d : tasks) {
-                if(d != null)
-                    d.write(dos);
-            }
-        }
-    } 
-
     public String getUrl() { return pageUrl; }
+    public int size() { return tasks.length(); }
     public int startDownload(ExecutorService ex) {
-        synchronized (tasks) {
-            int count = 0;
-            
-            for (DownloadTask d : tasks) {
-                if(d != null) {
-                    ex.execute(d);
-                    count++;
-                }
-            }
-            return count;
+        int count[] = {0};
+
+        forEach(d -> {
+            ex.execute(d);
+            count[0]++;
+        });
+
+        return count[0];
+    }
+    public Stream<DownloadTask> failedTasks() {
+        return IntStream.range(0, tasks.length()).mapToObj(tasks::get).filter(Objects::nonNull);
+    }
+
+    public void forEach(Consumer<DownloadTask> consumer) {
+        for (int i = 0; i < tasks.length(); i++) {
+            DownloadTask d = tasks.get(i);
+            if(d != null)
+                consumer.accept(d);
         }
     }
 
     private static final Logger downloadLogger = LoggerFactory.getLogger(DownloadTask.class);
-    private static final int rootNameCount = Config.DOWNLOAD_DIR.getNameCount();
+    private static final int rootNameCount = EnvConfig.DOWNLOAD_DIR.getNameCount();
 
     private final ConcurrentSkipListSet<Path> dirsCreated = new ConcurrentSkipListSet<>();
 
@@ -210,19 +258,16 @@ public class ScrappingResult {
         private String name;
 
         private DownloadTask(String url, int index) {
-            this.urlString = url;
+            this(url, null, index);
+        }
+        private DownloadTask(String url, String name, int index) {
+            this.urlString = Objects.requireNonNull(url);
+            this.name = name;
             this.index = index;
         }
-        private DownloadTask(DataInputStream dis, int index) throws IOException {
-            this.urlString = dis.readUTF();
-            this.name = dis.readUTF();
-            this.index = index;
+        public String getUrl() {
+            return urlString;
         }
-        private void write(DataOutputStream dos) throws IOException {
-            dos.writeUTF(urlString);
-            dos.writeUTF(name);
-        }
-
         @Override
         public void run()  {
             Path trgt = null;
@@ -239,7 +284,7 @@ public class ScrappingResult {
                 trgt = toParent ? folder.resolveSibling(name) : folder.resolve(name);
 
                 if(Files.exists(trgt)) {
-                    downloadLogger.info(urlString + yellow("  SKIPPED"));
+                    downloadLogger.info(urlString + yellow("  SKIPPED: ")+"[exists: "+subpath(trgt)+"]");
                     remove();
                     return;
                 }
@@ -256,7 +301,6 @@ public class ScrappingResult {
                         ) {
                     buffer.pipe(is, temp);
                 }
-
                 Files.move(temp, trgt, StandardCopyOption.REPLACE_EXISTING);
 
                 downloadLogger.info(yellow(urlString)+"\n   "+subpath(trgt));
@@ -270,9 +314,7 @@ public class ScrappingResult {
             return path == null ? "" : path.subpath(rootNameCount, path.getNameCount());
         }
         private void remove() {
-            synchronized (tasks) {
-                tasks[index] = null;
-            }
+            tasks.set(index, null);
         }
 
         private static final String fileNameMarker = "filename=\"";

@@ -1,7 +1,7 @@
 package scrapper;
 
 import static java.util.stream.Collectors.toSet;
-import static sam.console.ansi.ANSI.red;
+import static sam.console.ANSI.red;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,7 +13,7 @@ import java.util.Set;
 
 import org.slf4j.LoggerFactory;
 
-public final class Config {
+public final class EnvConfig {
 
     public static final Path DOWNLOAD_DIR;
     public static final int CONNECT_TIMEOUT;
@@ -40,11 +40,11 @@ public final class Config {
         }
         DISABLED_SCRAPPERS = temp;
         if(!DISABLED_SCRAPPERS.isEmpty())
-            LoggerFactory.getLogger(Config.class).info(red("Disabled: ")+DISABLED_SCRAPPERS);
+            LoggerFactory.getLogger(EnvConfig.class).info(red("Disabled: ")+DISABLED_SCRAPPERS);
 
         ResourceBundle.clearCache();
     }
     
-    private Config() {}
+    private EnvConfig() {}
 
 }

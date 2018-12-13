@@ -1,21 +1,13 @@
 package scrapper.scrapper.specials;
 
-import static java.util.stream.Collectors.toList;
-
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.Callable;
 
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
+import java.util.stream.Collectors;
 
-import scrapper.Config;
 import scrapper.scrapper.ScrappingResult;
 import scrapper.scrapper.UrlContainer;
 @Details(value="failblog", rss="http://feeds.feedburner.com/failblog")
@@ -25,7 +17,7 @@ public class FailBlog extends Specials {
         return () -> {
             String urlString = c.getUrl();
             URL url = new URL(urlString);
-            Document doc = Jsoup.parse(url,(int) Config.CONNECT_TIMEOUT);
+            Document doc = jsoup(url);
             Elements list = doc.getElementsByClass("resp-media");
 
             if(list.isEmpty()){
@@ -37,14 +29,10 @@ public class FailBlog extends Specials {
 
                 list = doc.getElementsByTag("video");
                 if(!list.isEmpty()){
-                    for (Element e : list) {
-                        try {
-                            return ScrappingResult.create(urlString, Arrays.asList(e.attr("data-videosrc")), getPath().resolve(prepareName(doc, url)));
-                        } catch (Exception e2) {
-                            urlFailed(e.absUrl("src"), e2);
-                        }
-                    }
-                    return null;
+                    List<String> l = new ArrayList<>(1);
+                    for (Element e : list)
+                        l.add(e.attr("data-videosrc"));
+                    return ScrappingResult.create(urlString, l, getPath().resolve(prepareName(doc, url)));
                 }
                 urlEmpty(urlString);
                 return null;
@@ -61,10 +49,9 @@ public class FailBlog extends Specials {
             List<String> list2 = 
                     list.stream()
                     .map(e -> e.attr(e.classNames().contains("lazyload") ? "data-src" :  "src"))
-                    .filter(Objects::nonNull)
-                    .collect(toList());
+                    .collect(Collectors.toList());
 
-            return ScrappingResult.create(urlString, list2, folder);
+            return ScrappingResult.create(urlString, list2, folder);    
 
         };
     }

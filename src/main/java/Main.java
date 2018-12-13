@@ -1,30 +1,21 @@
-import static sam.console.ansi.ANSI.red;
-import static sam.console.ansi.ANSI.yellow;
-
 import java.io.File;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
-
-import javax.swing.JOptionPane;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.jaunt.UserAgent;
-
 import javafx.application.Application;
-import sam.console.ansi.ANSI;
-import sam.myutils.fileutils.FilesUtils;
+import sam.console.ANSI;
 import scrapper.MainView;
+import scrapper.Utils;
 public class Main {
     public static void main(String[] args) throws Exception {
         if(args.length == 1 && args[0].equals("-v")) {
-            System.out.println("1.005");
+            System.out.println("1.015");
             System.exit(0);
         }
         
@@ -42,7 +33,8 @@ public class Main {
                 LoggerFactory.getLogger(Main.class)
                 .info(  "clean     clean cache\n"+
                         "open      open app dir\n"+
-                        "download   download links in failed-downlods.txt"); 
+                        "--download   download links in failed-downlods.txt\n"
+                        + "--file[File] load urls from a file"); 
             }
 
             if(args[0].equals("clean")) {
@@ -57,26 +49,29 @@ public class Main {
                     
             }
             if(args[0].equals("open"))
-                FilesUtils.openFile(new File("."));
+                Utils.openFile(new File("."));
             if(args[0].equals("download"))
                 new FailedDownloader();
 
             System.exit(0);
         }
-
-        checkVersion();
+        
+        for (int i = 0; i < args.length; i++) {
+            String s = args[i];
+            if("--file".equals(s)) {
+                if(args.length < i + 2) {
+                    System.out.println(ANSI.red("no file specified for: --file"));
+                    System.exit(0);
+                }
+                String file = args[i+1];
+                if(!new File(file).exists()){
+                    System.out.println(ANSI.red("file not found: ")+file);
+                    System.exit(0);
+                }
+                System.setProperty("urls-file", file);
+            }
+        }
+        
         Application.launch(MainView.class, args);
     }
-    private static void checkVersion() {
-        String s = UserAgent.getVersionInfo();
-        s = s.substring(s.lastIndexOf("Expiry")+"Expiry".length()+1);
-        LocalDate date = LocalDate.parse(s, DateTimeFormatter.ofPattern("MMM dd, yyyy"));
-
-        if(LocalDate.now().isAfter(date)) {
-            LoggerFactory.getLogger(Main.class).error(red("Jaunt Expired: ")+yellow(UserAgent.getVersionInfo()));
-            JOptionPane.showMessageDialog(null, UserAgent.getVersionInfo(), "Jaunt Expired", JOptionPane.ERROR_MESSAGE, null);
-            System.exit(-1);
-        }
-    }
-
 }

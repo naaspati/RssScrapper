@@ -15,7 +15,7 @@ IF [%1]==[clean] (
   GOTO:EOF
 )
 IF [%1]==[jaunt] (
-   COPY "C:\Users\Sameer\Documents\MEGA\eclipse_workplace\imports\jaunt\jaunt.jar" "app/lib/jaunt.jar"
+   COPY "%eclipse_workplace%\imports\jaunt\jaunt.jar" "%~dp0app/lib/jaunt.jar"
    GOTO:EOF
 )
 app\bin\RssScrapper.bat %*

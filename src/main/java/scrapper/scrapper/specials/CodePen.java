@@ -3,15 +3,19 @@ package scrapper.scrapper.specials;
 import static java.util.stream.Collectors.collectingAndThen;
 import static java.util.stream.Collectors.toSet;
 
+import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.nio.file.StandardOpenOption;
+
+
 import java.util.stream.Stream;
 
 import javax.net.ssl.HttpsURLConnection;
 
+import javafx.application.Platform;
+import scrapper.EnvConfig;
 import scrapper.scrapper.BufferHandler;
 import scrapper.scrapper.ScrappingResult;
 import scrapper.scrapper.UrlContainer;
@@ -20,11 +24,19 @@ public class CodePen extends Specials {
     private volatile ConcurrentSkipListSet<String> existingPens;
     private static volatile boolean dirCreated;
 
-    @Override
+    /**
+     * login required to download thus removed
+     * @param c
+     * @return
+     */
     protected Callable<ScrappingResult> toTask(UrlContainer c) {
+        save();
+        if(System.currentTimeMillis() > 10)
+            return null;
+        
         return () -> {
             String urlString = c.getUrl();
-            
+
             if(existingPens == null) {
                 synchronized (Specials.class) {
                     if(existingPens == null) {
@@ -59,5 +71,24 @@ public class CodePen extends Specials {
             urlSucess(urlString, 1);
             return null;
         };
+    }
+    
+    private volatile boolean saved = false;
+    
+    private  void save() {
+        if(saved || urls.isEmpty()) return;
+        
+        synchronized(CodePen.class) {
+            saved = true;
+            
+            try {
+                Files.createDirectories(EnvConfig.DOWNLOAD_DIR);
+                Files.write(EnvConfig.DOWNLOAD_DIR.resolve("codepen.urls.txt"), urls, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (IOException e) {
+                logger.error("failed to create file: "+EnvConfig.DOWNLOAD_DIR.resolve("codepen.urls.txt"));
+            }    
+        }
+
+        
     }
 }

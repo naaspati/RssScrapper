@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import scrapper.Config;
+import scrapper.EnvConfig;
 import scrapper.scrapper.AbstractScrapper;
 import scrapper.scrapper.UrlContainer;
 public abstract class Specials extends AbstractScrapper<UrlContainer> {
@@ -39,12 +39,12 @@ public abstract class Specials extends AbstractScrapper<UrlContainer> {
             }
             spl.urls.add(url);
         });
-
+        
         return map2.values().stream().filter(s -> !s.isEmpty()).collect(toList());
     }
 
     private final Path path;
-    private final Collection<String> urls;
+    final Collection<String> urls;
 
     @Override
     public void printCount(String format) {
@@ -59,7 +59,7 @@ public abstract class Specials extends AbstractScrapper<UrlContainer> {
         return urls.size();
     }
     protected Specials() {
-        this.path = Config.DOWNLOAD_DIR.resolve(getClass().getSimpleName().toLowerCase());
+        this.path = EnvConfig.DOWNLOAD_DIR.resolve(getClass().getSimpleName().toLowerCase());
         this.urls = Collections.synchronizedSet(new HashSet<>());
     }
     @Override

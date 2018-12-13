@@ -1,15 +1,15 @@
 package scrapper.scrapper;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 
-import scrapper.Config;
+
+
+import scrapper.EnvConfig;
 
 abstract class ResourceHandler<E> implements AutoCloseable {
     
     private E value;
    protected ResourceHandler() throws InterruptedException {
-        if(resources().isEmpty() && counter().get() < Config.THREAD_COUNT) {
+        if(resources().isEmpty() && counter().get() < EnvConfig.THREAD_COUNT) {
             this.value = createNew();
             counter().incrementAndGet();
         } else 
