@@ -1,82 +1,111 @@
-Dec 13, 2018 8:12:11 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/11/12/funniest-pictures-ever/  [31m EMPTY[0m
-Dec 13, 2018 8:12:15 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://expansion-fan-comics.deviantart.com/art/Ample-Blessings-773730887  [31m EMPTY[0m
-Dec 13, 2018 8:12:15 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://expansion-fan-comics.deviantart.com/art/Ample-Blessings-773730887  [31m EMPTY[0m
-Dec 13, 2018 8:12:17 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://okioppai.deviantart.com/art/Tumbles-New-Home-776433799  [31m EMPTY[0m
-Dec 13, 2018 8:12:17 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://okioppai.deviantart.com/art/Tumbles-New-Home-776433799  [31m EMPTY[0m
-Dec 13, 2018 8:12:29 PM scrapper.scrapper.AbstractScrapper warn
-WARNING: [31mhttp://feedproxy.google.com/~r/PoorlyDrawnLines/~3/3jIcjk-liFU/[0m
+Dec 13, 2018 8:27:38 PM scrapper.scrapper.ScrappingResult$DownloadTask run
+WARNING: [31mhttps://www.smbc-comics.com/comics/1543593516-20181130 (1).png[0m
+  commons\1543593516-20181130 (1).png-1750283363.html
+java.io.IOException: Server returned HTTP response code: 400 for URL: https://www.smbc-comics.com/comics/1543593516-20181130 (1).png
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1894)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1492)
+	at sun.net.www.protocol.https.HttpsURLConnectionImpl.getInputStream(HttpsURLConnectionImpl.java:263)
+	at scrapper.scrapper.ScrappingResult$DownloadTask.run(ScrappingResult.java:299)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+	at java.lang.Thread.run(Thread.java:748)
+
+Dec 13, 2018 8:27:40 PM scrapper.scrapper.ScrappingResult$DownloadTask run
+WARNING: [31mhttps://www.smbc-comics.com/comics/1542637838-20181119 (1).png[0m
+  commons\1542637838-20181119 (1).png441539569.html
+java.io.IOException: Server returned HTTP response code: 400 for URL: https://www.smbc-comics.com/comics/1542637838-20181119 (1).png
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1894)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1492)
+	at sun.net.www.protocol.https.HttpsURLConnectionImpl.getInputStream(HttpsURLConnectionImpl.java:263)
+	at scrapper.scrapper.ScrappingResult$DownloadTask.run(ScrappingResult.java:299)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+	at java.lang.Thread.run(Thread.java:748)
+
+Dec 13, 2018 8:28:02 PM scrapper.scrapper.ScrappingResult$DownloadTask run
+WARNING: [31mhttps://www.smbc-comics.com/comics/1543681019-20181201 (2).png[0m
+  commons\1543681019-20181201 (2).png1471470787.html
+java.io.IOException: Server returned HTTP response code: 400 for URL: https://www.smbc-comics.com/comics/1543681019-20181201 (2).png
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1894)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1492)
+	at sun.net.www.protocol.https.HttpsURLConnectionImpl.getInputStream(HttpsURLConnectionImpl.java:263)
+	at scrapper.scrapper.ScrappingResult$DownloadTask.run(ScrappingResult.java:299)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+	at java.lang.Thread.run(Thread.java:748)
+
+Dec 13, 2018 8:28:23 PM scrapper.scrapper.ScrappingResult$DownloadTask run
+WARNING: [31mhttps://www.smbc-comics.com/comics/1544133976-20181206 (1).png[0m
+  commons\1544133976-20181206 (1).png-437374166.html
+java.io.IOException: Server returned HTTP response code: 400 for URL: https://www.smbc-comics.com/comics/1544133976-20181206 (1).png
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1894)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1492)
+	at sun.net.www.protocol.https.HttpsURLConnectionImpl.getInputStream(HttpsURLConnectionImpl.java:263)
+	at scrapper.scrapper.ScrappingResult$DownloadTask.run(ScrappingResult.java:299)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+	at java.lang.Thread.run(Thread.java:748)
+
+Dec 13, 2018 8:28:24 PM scrapper.scrapper.ScrappingResult$DownloadTask run
+WARNING: [31mhttps://www.smbc-comics.com/comics/1542559296-20181118 (1).png[0m
+  commons\1542559296-20181118 (1).png1026044925.html
+java.io.IOException: Server returned HTTP response code: 400 for URL: https://www.smbc-comics.com/comics/1542559296-20181118 (1).png
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1894)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1492)
+	at sun.net.www.protocol.https.HttpsURLConnectionImpl.getInputStream(HttpsURLConnectionImpl.java:263)
+	at scrapper.scrapper.ScrappingResult$DownloadTask.run(ScrappingResult.java:299)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+	at java.lang.Thread.run(Thread.java:748)
+
+Dec 13, 2018 8:28:26 PM scrapper.scrapper.ScrappingResult$DownloadTask run
+WARNING: [31mhttps://www.smbc-comics.com/comics/1544624982-20181212 (1).png[0m
+  commons\1544624982-20181212 (1).png1033108145.html
+java.io.IOException: Server returned HTTP response code: 400 for URL: https://www.smbc-comics.com/comics/1544624982-20181212 (1).png
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1894)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1492)
+	at sun.net.www.protocol.https.HttpsURLConnectionImpl.getInputStream(HttpsURLConnectionImpl.java:263)
+	at scrapper.scrapper.ScrappingResult$DownloadTask.run(ScrappingResult.java:299)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+	at java.lang.Thread.run(Thread.java:748)
+
+Dec 13, 2018 8:28:56 PM scrapper.scrapper.ScrappingResult$DownloadTask run
+WARNING: [31mhttps://www.smbc-comics.com/comics/1542801487-20181121 (2).png[0m
+  commons\1542801487-20181121 (2).png-995943312.html
+java.io.IOException: Server returned HTTP response code: 400 for URL: https://www.smbc-comics.com/comics/1542801487-20181121 (2).png
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1894)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1492)
+	at sun.net.www.protocol.https.HttpsURLConnectionImpl.getInputStream(HttpsURLConnectionImpl.java:263)
+	at scrapper.scrapper.ScrappingResult$DownloadTask.run(ScrappingResult.java:299)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+	at java.lang.Thread.run(Thread.java:748)
+
+Dec 13, 2018 8:29:46 PM scrapper.scrapper.ScrappingResult$DownloadTask run
+WARNING: [31mhttps://www.smbc-comics.com/comics/1544190421-20181207.png[0m
+  commons\1544190421-201812071922223111.png
 java.net.SocketTimeoutException: Read timed out
 	at java.net.SocketInputStream.socketRead0(Native Method)
 	at java.net.SocketInputStream.socketRead(SocketInputStream.java:116)
 	at java.net.SocketInputStream.read(SocketInputStream.java:171)
 	at java.net.SocketInputStream.read(SocketInputStream.java:141)
-	at java.io.BufferedInputStream.fill(BufferedInputStream.java:246)
-	at java.io.BufferedInputStream.read1(BufferedInputStream.java:286)
+	at sun.security.ssl.InputRecord.readFully(InputRecord.java:465)
+	at sun.security.ssl.InputRecord.readV3Record(InputRecord.java:593)
+	at sun.security.ssl.InputRecord.read(InputRecord.java:532)
+	at sun.security.ssl.SSLSocketImpl.readRecord(SSLSocketImpl.java:983)
+	at sun.security.ssl.SSLSocketImpl.readDataRecord(SSLSocketImpl.java:940)
+	at sun.security.ssl.AppInputStream.read(AppInputStream.java:105)
+	at java.io.BufferedInputStream.read1(BufferedInputStream.java:284)
 	at java.io.BufferedInputStream.read(BufferedInputStream.java:345)
-	at sun.net.www.http.HttpClient.parseHTTPHeader(HttpClient.java:735)
-	at sun.net.www.http.HttpClient.parseHTTP(HttpClient.java:678)
-	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1587)
-	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1492)
-	at java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:480)
-	at org.jsoup.helper.HttpConnection$Response.execute(HttpConnection.java:656)
-	at org.jsoup.helper.HttpConnection$Response.execute(HttpConnection.java:679)
-	at org.jsoup.helper.HttpConnection$Response.execute(HttpConnection.java:629)
-	at org.jsoup.helper.HttpConnection.execute(HttpConnection.java:261)
-	at org.jsoup.helper.HttpConnection.get(HttpConnection.java:250)
-	at org.jsoup.Jsoup.parse(Jsoup.java:183)
-	at scrapper.scrapper.commons.CommonsJSoup.lambda$toTask$2(CommonsJSoup.java:30)
-	at scrapper.scrapper.AbstractScrapper.lambda$makeTask$0(AbstractScrapper.java:98)
-	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+	at sun.net.www.MeteredStream.read(MeteredStream.java:134)
+	at java.io.FilterInputStream.read(FilterInputStream.java:133)
+	at sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3393)
+	at sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3386)
+	at scrapper.scrapper.BufferHandler.pipe(BufferHandler.java:43)
+	at scrapper.scrapper.BufferHandler.pipe(BufferHandler.java:37)
+	at scrapper.scrapper.ScrappingResult$DownloadTask.run(ScrappingResult.java:302)
 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
 	at java.lang.Thread.run(Thread.java:748)
 
-Dec 13, 2018 8:12:33 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://stefangrosjean.deviantart.com/art/Let-me-show-you-the-world-in-my-eyes-772145065  [31m EMPTY[0m
-Dec 13, 2018 8:12:33 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://stefangrosjean.deviantart.com/art/Let-me-show-you-the-world-in-my-eyes-772145065  [31m EMPTY[0m
-Dec 13, 2018 8:12:34 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://borba.deviantart.com/art/Born-To-Be-Alive-18-776485234  [31m EMPTY[0m
-Dec 13, 2018 8:12:34 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://borba.deviantart.com/art/Born-To-Be-Alive-18-776485234  [31m EMPTY[0m
-Dec 13, 2018 8:12:37 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/11/28/funny-adults-acting-childish/  [31m EMPTY[0m
-Dec 13, 2018 8:12:40 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/11/15/funny-pic-dump-11-15-18/  [31m EMPTY[0m
-Dec 13, 2018 8:12:43 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://bebob4999.deviantart.com/art/Korrasami-773768848  [31m EMPTY[0m
-Dec 13, 2018 8:12:43 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://bebob4999.deviantart.com/art/Korrasami-773768848  [31m EMPTY[0m
-Dec 13, 2018 8:12:43 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/11/13/funny-pic-dump-11-13-18/  [31m EMPTY[0m
-Dec 13, 2018 8:12:45 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://screampunkarts.deviantart.com/art/Tickling-Batgirl-VS-Supergirl-773790287  [31m EMPTY[0m
-Dec 13, 2018 8:12:45 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://screampunkarts.deviantart.com/art/Tickling-Batgirl-VS-Supergirl-773790287  [31m EMPTY[0m
-Dec 13, 2018 8:12:45 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/11/23/funny-tweets-list/  [31m EMPTY[0m
-Dec 13, 2018 8:12:48 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/12/11/parking-spot-revenge/  [31m EMPTY[0m
-Dec 13, 2018 8:12:49 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/12/12/dumbest-things-to-happen-2018/  [31m EMPTY[0m
-Dec 13, 2018 8:12:50 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://wossarem.deviantart.com/art/April-2018-2-1st-Place-Midnight-774886984  [31m EMPTY[0m
-Dec 13, 2018 8:12:50 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://wossarem.deviantart.com/art/April-2018-2-1st-Place-Midnight-774886984  [31m EMPTY[0m
-Dec 13, 2018 8:12:52 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/12/01/netflix-accessories/  [31m EMPTY[0m
-Dec 13, 2018 8:12:53 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: http://pvponline.com/news/pax-unplugged-2018  [31m EMPTY[0m
-Dec 13, 2018 8:12:53 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/11/13/tweets-in-your-brain/  [31m EMPTY[0m
-Dec 13, 2018 8:13:02 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/11/10/relationships-throw-up-in-mouth/  [31m EMPTY[0m
-Dec 13, 2018 8:13:06 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/12/12/awkward-things-2018/  [31m EMPTY[0m
-Dec 13, 2018 8:13:14 PM scrapper.scrapper.AbstractScrapper urlEmpty
-WARNING: https://pleated-jeans.com/2018/11/30/25-funny-tweets-racked-50000-retweets-month/  [31m EMPTY[0m

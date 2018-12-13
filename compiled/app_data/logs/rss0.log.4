@@ -1,2 +1,24 @@
-Dec 13, 2018 6:15:09 PM Main checkVersion
-SEVERE: [31mJaunt Expired: [0m[33mJaunt 1.5.1 Redistributable Edition, Expiry Nov 30, 2018[0m
+Dec 13, 2018 8:06:40 PM Main$1 uncaughtException
+SEVERE: Thread: main
+java.lang.RuntimeException: Exception in Application start method
+	at com.sun.javafx.application.LauncherImpl.launchApplication1(LauncherImpl.java:917)
+	at com.sun.javafx.application.LauncherImpl.lambda$launchApplication$154(LauncherImpl.java:182)
+	at java.lang.Thread.run(Thread.java:748)
+Caused by: java.lang.StringIndexOutOfBoundsException: String index out of range: -8
+	at java.lang.String.substring(String.java:1967)
+	at scrapper.scrapper.AbstractScrapper.urlsFilter(AbstractScrapper.java:193)
+	at scrapper.scrapper.commons.Commons.<init>(Commons.java:44)
+	at scrapper.scrapper.commons.CommonsJSoup.<init>(CommonsJSoup.java:21)
+	at scrapper.scrapper.commons.Commons.get(Commons.java:26)
+	at scrapper.MainView.start2(MainView.java:122)
+	at scrapper.MainView.start(MainView.java:108)
+	at com.sun.javafx.application.LauncherImpl.lambda$launchApplication1$161(LauncherImpl.java:863)
+	at com.sun.javafx.application.PlatformImpl.lambda$runAndWait$174(PlatformImpl.java:326)
+	at com.sun.javafx.application.PlatformImpl.lambda$null$172(PlatformImpl.java:295)
+	at java.security.AccessController.doPrivileged(Native Method)
+	at com.sun.javafx.application.PlatformImpl.lambda$runLater$173(PlatformImpl.java:294)
+	at com.sun.glass.ui.InvokeLaterDispatcher$Future.run(InvokeLaterDispatcher.java:95)
+	at com.sun.glass.ui.win.WinApplication._runLoop(Native Method)
+	at com.sun.glass.ui.win.WinApplication.lambda$null$147(WinApplication.java:177)
+	... 1 more
+

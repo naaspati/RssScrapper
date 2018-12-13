@@ -90,11 +90,11 @@
       "dir": "indianexpress",
       "remove-if": ["1x1.trans.gif"]
     },
-	{
-	"name":"pleated-jeans",
-	"selector":"img.aligncenter",
-	"attr":"src",
-	"dir":"pleated-jeans"
-	}
+    {
+      "name": "pleated-jeans",
+      "selector": "img.aligncenter",
+      "attr": "src",
+      "dir": "pleated-jeans"
+    }
   ]
 }

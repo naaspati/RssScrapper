@@ -5,8 +5,7 @@
       "selector": "<img class='dev-content-full '>",
       "dir": "deviantart",
       "attr": "src",
-      "rss":
-        "http://backend.deviantart.com/rss.xml?q=boost%3Apopular+meta%3Aall+max_age%3A24h&type=deviation"
+      "rss": "http://backend.deviantart.com/rss.xml?q=boost%3Apopular+meta%3Aall+max_age%3A24h&type=deviation"
     },
     {
       "name": "unsplash",
