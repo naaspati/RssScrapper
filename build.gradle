@@ -9,11 +9,11 @@ repositories {
 // replacing jaunt -> okHttp
 
 dependencies {
-   compile files( 'myutils.jar' )
+  //  compile files( 'myutils.jar' )
    compile 'org.slf4j:slf4j-jdk14:1.8.0-beta1'
    compile 'org.jsoup:jsoup:+'
    compile 'org.json:json:20180813'
-   compile 'com.squareup.okhttp3:okhttp:3.12.0'
+   // compile 'com.squareup.okhttp3:okhttp:3.12.0'
 }
  
 version = 1.02
@@ -45,6 +45,7 @@ task install(type: Copy, dependsOn:[installDist, deleteJars]) {
   
   ${versionText()}
   
+  cd /d \"%~dp0..\"
   java %JVM_OPTS% %JAVA_OPTS% -cp \"%~dp0;%~dp0${String.join(';%~dp0', libdir.list())}\" ${mainClassName} %*
   
   """.stripIndent()

@@ -3,6 +3,9 @@ package scrapper.scrapper;
 
 
 
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import scrapper.EnvConfig;
 
 abstract class ResourceHandler<E> implements AutoCloseable {

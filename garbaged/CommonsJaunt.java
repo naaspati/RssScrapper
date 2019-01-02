@@ -5,13 +5,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-
-
-
-
+import java.util.concurrent.Callable;
 
 import scrapper.scrapper.ScrappingResult;
 import scrapper.scrapper.UserAgentHandler;
+import scrapper.scrapper.commons.Commons.CommonEntry;
 import scrapper.scrapper.commons.Commons.CommonEntry.CommonEntryUrlContainer;
 
 public class CommonsJaunt extends Commons {
@@ -28,10 +26,10 @@ public class CommonsJaunt extends Commons {
                 
                 agent.visit(url);
                 Elements els = agent.doc().findEvery(c.selector);
-                urlSucess(url, els.size());
+                // urlSucess(url, els.size());
 
                 if(els.size() == 0) {
-                    urlSucess(url, testYoutube(agent.doc()));
+                    // urlSucess(url, testYoutube(agent.doc()));
                     return null;
                 }
 

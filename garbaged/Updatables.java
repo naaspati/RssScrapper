@@ -3,7 +3,7 @@ package scrapper;
 import java.util.ResourceBundle;
 import java.util.Timer;
 import java.util.TimerTask;
-
+import java.util.concurrent.CopyOnWriteArraySet;
 
 import javafx.application.Platform;
 

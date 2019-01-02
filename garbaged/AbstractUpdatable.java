@@ -1,6 +1,6 @@
 package scrapper;
 
-
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class AbstractUpdatable implements Updatable {
     private final AtomicBoolean change = new AtomicBoolean(false);

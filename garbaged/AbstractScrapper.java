@@ -1,7 +1,7 @@
 package scrapper.scrapper;
 import static sam.console.ANSI.red;
 import static sam.console.ANSI.yellow;
-import static sam.fileutils.RemoveInValidCharFromString.removeInvalidCharsFromFileName;
+import static sam.io.fileutils.FileNameSanitizer.*;
 import static scrapper.scrapper.DataStore.EMPTY;
 import static scrapper.scrapper.DataStore.URL_FAILED;
 import static scrapper.scrapper.DataStore.YOUTUBE;
@@ -16,10 +16,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-
+import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
+import org.jsoup.Jsoup;
+import org.omg.CosNaming.NamingContextPackage.NotFound;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,7 +30,6 @@ import scrapper.EnvConfig;
 import scrapper.InfoBox;
 import scrapper.Utils;
 public abstract class  AbstractScrapper<E extends UrlContainer> implements Iterable<E> {
-    protected Logger logger = LoggerFactory.getLogger(getClass());
 
     static {
         System.out.println(ANSI.green("AbstractScrapper initiated"));
@@ -44,9 +45,6 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
                 return true;
             c = c.getSuperclass();
         }
-    }
-    protected UserAgentHandler getUserAgent() throws InterruptedException {
-        return new UserAgentHandler();
     }
     private final InfoBox infoBox = new InfoBox(this.getClass().getSimpleName().toLowerCase());
     public InfoBox getInfoBox() {
@@ -105,16 +103,18 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
     protected final void progressCompleted() {
         infoBox.progress(true);
     }
+    protected final ScrappingResult progress(ScrappingResult result) {
+        infoBox.progress(result != null);
+        return result;
+    }
+    /* FIXME
     protected Document jsoup(URL url) throws IOException {
         return Jsoup.parse(url, EnvConfig.CONNECT_TIMEOUT);
     }
     protected Document jsoup(String url) throws IOException {
         return jsoup(new URL(url));
     }
-    protected final ScrappingResult progress(ScrappingResult result) {
-        infoBox.progress(result != null);
-        return result;
-    }
+    
     protected final String prepareName(org.jsoup.nodes.Document doc, URL url) {
         return Optional.ofNullable(doc.title())
                 .map(RemoveInValidCharFromString::removeInvalidCharsFromFileName)
@@ -144,6 +144,8 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
         }
         return testYoutube(b.build());
     }
+     */
+    
     private final int testYoutube(Stream<String> stream) {
         int[] count = {0};
 
@@ -181,7 +183,7 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
             } catch (Exception e) {
                 continue;
             }
-            Logger logger = LoggerFactory.getLogger(cls);
+            Logger logger = Utils.logger(cls);
 
             if(start + 1 < url.length()){
                 String part = url.substring(start, url.indexOf('/', start + 1));
@@ -200,32 +202,5 @@ public abstract class  AbstractScrapper<E extends UrlContainer> implements Itera
                 }               
             }
         }
-    }
-    protected final void warn(String msg, Throwable e) {
-        logger.warn(msg, e);
-    }
-    private static final String format = "{}  " + yellow("({})"); 
-    protected final void urlSucess(String url, int size) {
-        if(size > 0) {
-            logger.info(format, url, size);
-            DataStore.URL_FAILED.remove(url);
-            DataStore.EMPTY.remove(url);
-        }
-        else
-            urlEmpty(url);
-    }
-    /**
-     * report urlerror and add to failed
-     * @param url
-     * @param error
-     */
-    protected final void urlFailed(String url, Throwable error) {
-        warn(red(url), error);
-        URL_FAILED.add(url);
-    }
-    private static final String formatEmpty = "{}  " + red(" EMPTY");
-    protected final void urlEmpty(String url) {
-        logger.warn(formatEmpty, url);
-        EMPTY.add(url);
     }
 }

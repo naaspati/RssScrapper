@@ -20,20 +20,19 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-
-
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import sam.console.ANSI;
 import scrapper.EnvConfig;
+import scrapper.Utils;
 
 public final class DataStore<E extends Collection<String>> {
-    public static final DataStore<List<String>> URL_FAILED;
-    public static final DataStore<List<String>> EMPTY;
+    
     public static final DataStore<List<String>> YOUTUBE;
     public static final DataStore<List<String>> DISABLED;
 
@@ -57,8 +56,7 @@ public final class DataStore<E extends Collection<String>> {
         DISABLED = parse("disabled", mapper);
 
         MIME_EXT_MAP = readFileext_mimeMap();
-
-        Runtime.getRuntime().addShutdownHook(new Thread(DataStore::write));
+        Utils.addShutDownTask(DataStore::write);
     }
 
     private static <E extends Collection<String>> DataStore<E> parse(String key, Function<List<String>, E> listMapper){
@@ -86,7 +84,7 @@ public final class DataStore<E extends Collection<String>> {
             try {
                 Files.createDirectories(root); 
             } catch (IOException e) {
-                LoggerFactory.getLogger(DataStore.class).error(ANSI.red("failed to creatDir: ")+root, e);
+                Utils.logger(DataStore.class).error(ANSI.red("failed to creatDir: ")+root, e);
                 return;
             }
 
@@ -94,7 +92,7 @@ public final class DataStore<E extends Collection<String>> {
                 try {
                     Files.write(savePath(d.key), d.data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
                 } catch (IOException e) {
-                    LoggerFactory.getLogger(DataStore.class).error(ANSI.red("failed to write: ")+d.key.concat("txt"), e);                
+                    Utils.logger(DataStore.class).error(ANSI.red("failed to write: ")+d.key.concat("txt"), e);                
                 }
             }
         } finally {
@@ -123,12 +121,12 @@ public final class DataStore<E extends Collection<String>> {
 
             Path root = EnvConfig.DOWNLOAD_DIR;
 
-            Logger logger = LoggerFactory.getLogger(DataStore.class);
+            Logger logger = Utils.logger(DataStore.class);
             logger.info("\n"+ANSI.createBanner("SUMMERY"));
 
-            List<String> list = ScrappingResult.keys()
+            List<String> list = DownloadTasks.keys()
                     .stream()
-                    .flatMap(s -> s.failedTasks())
+                    .flatMap(s -> s.failedTasks().stream())
                     .map(s -> s == null ? null : s.getUrl())
                     .collect(Collectors.toList());
             
@@ -149,7 +147,7 @@ public final class DataStore<E extends Collection<String>> {
             }
 
             Path p = root.resolve("failed.txt");
-            String failed = ScrappingResult.failedTaskLog();
+            String failed = DownloadTasks.failedTaskLog();
 
             try {
                 if(failed == null) 

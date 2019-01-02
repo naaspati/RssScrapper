@@ -3,41 +3,38 @@ import static sam.console.ANSI.red;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.List;
-
-
-
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import sam.console.ANSI;
 import sam.myutils.MyUtilsCmd;
-import scrapper.EnvConfig;
-import scrapper.scrapper.DataStore;
-import scrapper.scrapper.ScrappingResult;
-import scrapper.scrapper.ScrappingResult.DownloadTask;
+import scrapper.Utils;
+import scrapper.scrapper.DownloadTasks;
 
 public class FailedDownloader {
     
     FailedDownloader() throws IOException {
-        Logger logger = LoggerFactory.getLogger(getClass());
+        Logger logger = Utils.logger(getClass());
         
-        if(Files.notExists(EnvConfig.DOWNLOAD_DIR)) {
-            logger.error(red("file not found: ")+EnvConfig.DOWNLOAD_DIR);
+        if(Files.notExists(Utils.DOWNLOAD_DIR)) {
+            logger.error(red("file not found: ")+Utils.DOWNLOAD_DIR);
             return;
         }
-        if(!ScrappingResult.hasFailed()){
+        if(!DownloadTasks.hasFailed()){
             logger.info(red("no failed found "));
             return;
         }
         
-        List<DownloadTask> list = ScrappingResult.keys()
+        List<DownloadTask> list = DownloadTasks.keys()
                 .stream()
-                .flatMap(ScrappingResult::failedTasks)
+                .flatMap(DownloadTasks::failedTasks)
                 .collect(Collectors.toList());
         
-        ExecutorService ex = Executors.newFixedThreadPool(Math.min(EnvConfig.THREAD_COUNT, list.size()));
+        ExecutorService ex = Executors.newFixedThreadPool(Math.min(Utils.THREAD_COUNT, list.size()));
         
         System.out.println(ANSI.yellow("total: ")+list.size());
         list.forEach(ex::execute);

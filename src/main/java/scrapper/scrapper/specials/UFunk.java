@@ -1,65 +1,50 @@
 package scrapper.scrapper.specials;
 
-import static java.util.stream.Collectors.toList;
-import static sam.fileutils.RemoveInValidCharFromString.removeInvalidCharsFromFileName;
+import static sam.io.fileutils.FileNameSanitizer.sanitize;
+import static scrapper.scrapper.ScrappingResult.EMPTY;
 
-import java.net.URL;
-import java.nio.file.Files;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
+import org.jsoup.nodes.Document;
+import org.jsoup.select.Elements;
 
-
-
-
-
-import scrapper.EnvConfig;
+import sam.myutils.Checker;
+import scrapper.ScrappingException;
+import scrapper.scrapper.Config;
 import scrapper.scrapper.ScrappingResult;
-import scrapper.scrapper.UrlContainer;
+import scrapper.scrapper.Selector;
 
-@Details(value="ufunk", rss="http://www.ufunk.net/en/feed")
-public class UFunk extends Specials {
+public class UFunk implements Selector {
+	@Override
+	public ScrappingResult select(String url, Config config) throws ScrappingException, IOException {
+		Document doc = config.parse(url);
+		
+		Elements els = doc.getElementsByClass("entry-content");
+		List<String> list = null;
 
-    @Override
-    protected Callable<ScrappingResult> toTask(UrlContainer c) {
-        return () -> {
-            String url = c.getUrl();
-            Document doc = Jsoup.parse(new URL(url), (int) EnvConfig.CONNECT_TIMEOUT);
-            Elements els = doc.getElementsByClass("entry-content");
-            List<String> list = null;
+		if(els.size() != 0) {
+			list = els.get(0).getElementsByTag("img")
+					.stream()
+					.map(img -> {
+						String s = img.attr("srcset");
+						if(s == null || s.trim().isEmpty())
+							return img.attr("src");
 
-            if(els.size() != 0) {
-                list = els.get(0).getElementsByTag("img")
-                        .stream()
-                        .map(img -> {
-                            String s = img.attr("srcset");
-                            if(s == null || s.trim().isEmpty())
-                                return img.attr("src");
+						int n = s.indexOf(' ');
+						return n < 0 ? s : s.substring(0, n);
+					})
+					.filter(Objects::nonNull)
+					.collect(Collectors.toList());
+		}
 
-                            int n = s.indexOf(' ');
-                            return n < 0 ? s : s.substring(0, n);
-                        })
-                        .filter(Objects::nonNull)
-                        .collect(toList());
-            }
+		if(Checker.isEmpty(list))
+			return EMPTY;
 
-            if(list == null || list.isEmpty()){
-                urlEmpty(url);
-                return null;
-            }
-
-            Path folder = getPath().resolve(removeInvalidCharsFromFileName(doc.getElementsByClass("entry-title").text()));
-            urlSucess(url, list.size());
-
-            int count = 0;
-            if(Files.exists(folder) && (count = folder.toFile().list().length) == list.size()) {
-                urlSucess(url, count);
-                return null;
-            }
-
-            return ScrappingResult.create(url, list, folder);
-
-        };
-    }
+		Path folder = config.getDir().resolve(sanitize(doc.getElementsByClass("entry-title").text()));
+		return new ScrappingResult(folder, list);
+	}
 }

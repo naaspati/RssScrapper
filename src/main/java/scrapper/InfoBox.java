@@ -1,9 +1,5 @@
 package scrapper;
 
-
-
-
-
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.scene.control.Separator;
@@ -11,19 +7,16 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.text.Text;
 
-public final class InfoBox extends BorderPane  implements Updatable {
+public final class InfoBox extends BorderPane {
     
     private final Text progressT = new Text();
     private final Text totalT = new Text();
     private final Text failedT = new Text();
-    private double total;
-    private final AtomicInteger progress = new AtomicInteger(0);
-    private final AtomicInteger failed = new AtomicInteger(0);
-    private final AtomicBoolean changed = new AtomicBoolean(false);
+    private volatile double total;
+    private volatile int progress, failed;
 
     public InfoBox (String name) {
         getStyleClass().add("info-box");
-        Updatables.add(this);
 
         Text nameT = new Text(name);
         nameT.getStyleClass().add("name-text");
@@ -35,42 +28,28 @@ public final class InfoBox extends BorderPane  implements Updatable {
         setRight(new HBox(5, progressT, new Separator(Orientation.VERTICAL), totalT,new Separator(Orientation.VERTICAL), failedT));
         BorderPane.setMargin(nameT, new Insets(0, 10, 0, 0));
     }
-    @Override
     public void update() {
-        int p = progress.get();
-        int f = failed.get();
-        
-        if(p+f == total)
+        if(progress+failed == total)
             getStyleClass().add("completed");
 
-        this.progressT.setText(String.valueOf(p));
-        this.failedT.setText(String.valueOf(f));
-    }
-    @Override
-    public boolean isChanged() {
-        return changed.get();
-    }
-    @Override
-    public void setChanged(boolean value) {
-        changed.set(value);
+        this.progressT.setText(Integer.toString(progress));
+        this.failedT.setText(Integer.toString(failed));
     }
     public int getFailedCount() {
-        return failed.get();
+        return failed;
     }
     public void setTotal(int total) {
         this.total = total;
-        totalT.setText(String.valueOf(total));
+        totalT.setText(Integer.toString(total));
     }
 
     public void progress(boolean success) {
         if(success)
-            progress.incrementAndGet();
+            progress++;
         else
-            failed.incrementAndGet();
-            
-        setChanged(true);
+            failed++;
     }
     public void setCompleted(int completed) {
-        progress.set(completed);
+        progress = completed;
     }
 }

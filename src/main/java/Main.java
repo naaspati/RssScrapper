@@ -1,4 +1,5 @@
 import java.io.File;
+import java.io.IOException;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -6,14 +7,15 @@ import java.nio.file.Paths;
 import java.util.Comparator;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javafx.application.Application;
 import sam.console.ANSI;
+import sam.io.fileutils.FileOpener;
 import scrapper.MainView;
+import scrapper.ScrappingException;
 import scrapper.Utils;
 public class Main {
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) throws ScrappingException, IOException {
         if(args.length == 1 && args[0].equals("-v")) {
             System.out.println("1.015");
             System.exit(0);
@@ -25,12 +27,12 @@ public class Main {
         Thread.setDefaultUncaughtExceptionHandler(new UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
-                LoggerFactory.getLogger(Main.class).error("Thread: "+t.getName(), e);
+                Utils.logger(Main.class).error("Thread: "+t.getName(), e);
             }
         });
         if(args.length == 1) {
             if(args[0].equals("h") || args[0].equals("-h") || args[0].equals("help") || args[0].equals("-help")) {
-                LoggerFactory.getLogger(Main.class)
+                Utils.logger(Main.class)
                 .info(  "clean     clean cache\n"+
                         "open      open app dir\n"+
                         "--download   download links in failed-downlods.txt\n"
@@ -38,7 +40,7 @@ public class Main {
             }
 
             if(args[0].equals("clean")) {
-                Logger l = LoggerFactory.getLogger(Main.class);
+                Logger l = Utils.logger(Main.class);
                 
                 Path p = Paths.get("app_data");
                 if(Files.exists(p)) {
@@ -49,7 +51,7 @@ public class Main {
                     
             }
             if(args[0].equals("open"))
-                Utils.openFile(new File("."));
+            	FileOpener.openFile(new File("."));
             if(args[0].equals("download"))
                 new FailedDownloader();
 

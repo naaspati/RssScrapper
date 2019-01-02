@@ -1,57 +1,49 @@
 package scrapper.scrapper.specials;
 
-import java.net.URL;
+import static scrapper.scrapper.ScrappingResult.EMPTY;
+
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
-
-
-
+import sam.myutils.Checker;
+import scrapper.ScrappingException;
+import scrapper.scrapper.Config;
 import scrapper.scrapper.ScrappingResult;
-import scrapper.scrapper.UrlContainer;
+import scrapper.scrapper.Selector;
 
+public class PLEATED_JEANS implements  Selector {
+	@Override
+	public ScrappingResult select(String url, Config config) throws ScrappingException, IOException {
+		Document doc = config.parse(url); 
+		Element el = doc.getElementById("content");
 
+		ArrayList<String> list = null;
 
-@Details(value="pleated-jeans", rss="http://pleated-jeans.com/feed")
-public class PLEATED_JEANS extends Specials {
+		if(el != null) {
+			list = new ArrayList<>();
 
-    @Override
-    protected Callable<ScrappingResult> toTask(UrlContainer c) {
-        return () -> {
-            String url = c.getUrl();
+			for (Element e : el.getElementsByTag("img")) 
+				list.add(e.attr("src"));
 
-            Document doc = jsoup(url); 
-            Element el = doc.getElementById("content");
+			list.removeIf(s -> s == null || s.isEmpty());
+		}
 
-            ArrayList<String> list = null;
-
-            if(el != null) {
-                list = new ArrayList<>();
-
-                for (Element e : el.getElementsByTag("img")) 
-                    list.add(e.attr("src"));
-                
-                list.removeIf(s -> s == null || s.isEmpty());
-            }
-
-
-            if(list == null || list.isEmpty()) {
-                int count = testYoutube(doc);
-                if(count > 0)
-                    urlSucess(url, count);
-                else
-                    urlEmpty(url);
-                return null;
-            }
-            
-            if(list.size() < 4){
-                urlEmpty(url);
-                return null;
-            }
-            urlSucess(url, list.size());
-            return ScrappingResult.create(url, list, getPath().resolve(prepareName(doc, new URL(url))));
-        }; 
-    }
+		if(Checker.isEmpty(list)) {
+			List<String> result = testYoutube(doc);
+			if(Checker.isNotEmpty(result))
+				return new ScrappingResult(null, result);
+			
+			return EMPTY;
+		}
+		if(list.size() < 4)
+			return EMPTY;
+		
+		return new ScrappingResult(config.getDir().resolve(prepareName(doc, url)), list);
+	}
 
 
 }
