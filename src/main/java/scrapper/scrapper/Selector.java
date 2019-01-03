@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,7 +18,6 @@ import org.jsoup.nodes.Element;
 
 import sam.io.fileutils.FileNameSanitizer;
 import sam.myutils.MyUtilsException;
-import sam.nopkg.Junk;
 import scrapper.ScrappingException;
 
 @FunctionalInterface
@@ -73,25 +73,16 @@ class DefaultSelector implements Selector {
 		Document doc = config.parse(urlString);
 		List<Element> list = func.apply(doc);
 
-		return Junk.notYetImplemented();
+		if(list.isEmpty()) 
+			return ScrappingResult.EMPTY;
 
-		/** FIXME
-		 	            if(list.isEmpty()){
-            // urlSucess(urlString, testYoutube(doc));
-            return null;
-        }
-
-        // urlSucess(urlString, list.size());
-
-        List<String> list2 = list.stream().map(e -> e.absUrl(c.attr))
-                .filter(s -> !c.skipDownload(s))
-                .collect(toList());
-
-        return ScrappingResult.create(urlString, list, dir.resolve(prepareName(doc, url)));
-		 */
-
+		List<String> list2 = list.stream()
+				.map(e -> e.absUrl(config.attr))
+				.collect(Collectors.toList());
+		
+		Path p = config.dir.resolve(prepareName(doc, urlString));
+		return new ScrappingResult(urlString, p, list2);
 	}
-
 }
 
 class QuerySelector extends DefaultSelector {

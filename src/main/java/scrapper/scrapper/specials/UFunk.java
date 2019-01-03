@@ -45,6 +45,6 @@ public class UFunk implements Selector {
 			return EMPTY;
 
 		Path folder = config.getDir().resolve(sanitize(doc.getElementsByClass("entry-title").text()));
-		return new ScrappingResult(folder, list);
+		return new ScrappingResult(url, folder, list);
 	}
 }

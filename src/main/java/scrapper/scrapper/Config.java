@@ -6,7 +6,10 @@ import static scrapper.Utils.DOWNLOAD_DIR;
 import java.io.Closeable;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.net.MalformedURLException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,14 +29,14 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.slf4j.Logger;
 
-import sam.nopkg.Junk;
 import scrapper.Utils;
 import scrapper.scrapper.UrlFilter.DefaultUrlFilter;
 import scrapper.scrapper.UrlFilter.SpecializedUrlFilter;
 
 public final class Config implements ConfigKeys, Closeable {
 	private static final Logger LOGGER = Utils.logger(Config.class);
-
+	private static final Set<String> query_selectors = new HashSet<>();
+	
 	public final String name, attr, rss;
 	public final Path dir;
 	public final int timeout;
@@ -55,13 +58,28 @@ public final class Config implements ConfigKeys, Closeable {
 	static {
 		Set<String> set = new HashSet<>();
 		ALL_KEYS = Collections.unmodifiableSet(set);
-
+		Path config_query_selectors = Utils.APP_DATA.resolve("config_query_selectors");
+		
 		try {
+			if(Files.exists(config_query_selectors))
+				Files.lines(config_query_selectors).forEach(query_selectors::add);
 			for (Field f : ConfigKeys.class.getDeclaredFields())
 				set.add((String)f.get(null));
-		} catch (IllegalArgumentException | IllegalAccessException e) {
+		} catch (IOException | IllegalArgumentException | IllegalAccessException e) {
 			throw new RuntimeException(e);
 		}
+		
+		int size = query_selectors.size();
+		Utils.addShutDownTask(() -> {
+			if(query_selectors.size() != size) {
+				try {
+					Files.write(config_query_selectors, query_selectors, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+				
+		});
 	}
 
 	public Config(String name, JSONObject json) throws InstantiationException, IllegalAccessException, ClassNotFoundException{
@@ -74,13 +92,17 @@ public final class Config implements ConfigKeys, Closeable {
 		this.timeout = json.optInt(TIMEOUT, CONNECT_TIMEOUT);
 		this.followRedirects = (Boolean) json.opt(FOLLOW_REDIRECTS);
 		this.disable = json.optBoolean(DISABLE);
+		
+		try {
+			urlFilter = urlFilter(json);
+			priority = urlFilter.priority();
 
-		urlFilter = urlFilter(json);
-		priority = urlFilter.priority();
-
-		selector = disable ? null : selector(json);
-		selectorLogger = disable ? null : Utils.logger(name);
-		downloader = disable ? null : downloader(json); 
+			selector = disable ? null : selector(json);
+			selectorLogger = disable ? null : Utils.logger(name);
+			downloader = disable ? null : downloader(json); 
+		} catch (Exception e) {
+			throw new IllegalStateException("failed init: \n"+name+": "+json.toString(4), e);
+		}
 
 		String[] not_contains = json.keySet().stream().filter(s -> !ALL_KEYS.contains(s)).toArray(String[]::new); 
 
@@ -98,8 +120,7 @@ public final class Config implements ConfigKeys, Closeable {
 		return dw != null ? dw : getDefaultDownloader(json);
 	}
 	private Downloader getDefaultDownloader(JSONObject json) {
-		//FIXME
-		return Junk.notYetImplemented();
+		return new DefaultDownloader();
 	}
 
 	private Selector selector(JSONObject json) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
@@ -113,10 +134,13 @@ public final class Config implements ConfigKeys, Closeable {
 			if(s.indexOf(' ') >= 0)
 				return new QuerySelector(s);
 
+			if(query_selectors.contains(s))
+				return new QuerySelector(s);
 			try {
 				return object(s);
 			} catch (ClassNotFoundException e) {
 				LOGGER.warn("class not found: \""+s+"\", creating as QuerySelector");
+				query_selectors.add(s);
 				return new QuerySelector(s);
 			}  
 		} else {
@@ -140,7 +164,7 @@ public final class Config implements ConfigKeys, Closeable {
 		}
 	}
 
-	private UrlFilter urlFilter(JSONObject json) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
+	private UrlFilter urlFilter(JSONObject json) throws InstantiationException, IllegalAccessException, ClassNotFoundException, MalformedURLException {
 		if(!json.has(URL_FILTER))
 			return new DefaultUrlFilter(this);
 
@@ -157,6 +181,8 @@ public final class Config implements ConfigKeys, Closeable {
 
 		SpecializedUrlFilter g = new SpecializedUrlFilter();
 		set(g, InitializeAs.URL_FILTER, json, Collections.emptyList());
+		if(!g.isValid())
+			throw new IllegalArgumentException("no filter setting specified");
 		return g;
 	}
 	private <E> E parseClass(JSONObject json, String jsonKey, InitializeAs initializeAs) throws ClassNotFoundException, InstantiationException, IllegalAccessException {
@@ -236,7 +262,7 @@ public final class Config implements ConfigKeys, Closeable {
 		o.put(DIR, dir.toString());
 		o.put(URL_FILTER, string(urlFilter));
 		o.put(SELECTOR, string(selector));
-		o.put(DOWNLOADER, string(selector));
+		o.put(DOWNLOADER, string(downloader));
 		o.put(COOKIES, cookies);
 		o.put(HEADERS, headers);
 		o.put(TIMEOUT, timeout);

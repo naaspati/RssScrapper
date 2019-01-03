@@ -35,14 +35,14 @@ public class PLEATED_JEANS implements  Selector {
 		if(Checker.isEmpty(list)) {
 			List<String> result = testYoutube(doc);
 			if(Checker.isNotEmpty(result))
-				return new ScrappingResult(null, result);
+				return new ScrappingResult(null, null, result);
 			
 			return EMPTY;
 		}
 		if(list.size() < 4)
 			return EMPTY;
 		
-		return new ScrappingResult(config.getDir().resolve(prepareName(doc, url)), list);
+		return new ScrappingResult(url, config.getDir().resolve(prepareName(doc, url)), list);
 	}
 
 

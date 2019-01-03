@@ -1,5 +1,6 @@
 package scrapper;
 
+import static java.nio.file.StandardOpenOption.READ;
 import static sam.string.StringUtils.contains;
 
 import java.io.BufferedReader;
@@ -21,24 +22,30 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.ResourceBundle;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import sam.myutils.MyUtilsException;
 import sam.string.StringUtils.StringSplitIterator;
+import scrapper.scrapper.Config;
 
 public class Utils {
 	private static final Logger LOGGER = Utils.logger(Utils.class);
 	
 	private Utils() {}
 
-	public static final String APP_DATA = "app_data";
-	private static final Path MY_DIR = Paths.get(APP_DATA, Utils.class.getName());
+	public static final Path APP_DATA = Paths.get("app_data");
 	public static final Path DOWNLOAD_DIR;
 	public static final int CONNECT_TIMEOUT;
 	public static final int READ_TIMEOUT;
 	public static final int THREAD_COUNT;
+	public static final int BUFFER_SIZE;
 
 	private static final Collection<Runnable> tasks = new ArrayList<>();
+	private static Runnable last_task;
 	
 	private static final Map<String, String> ALL_MIME_EXT_MAP = new HashMap<>();
 	private static final Map<String, String> FREQUENT_MIME_EXT_MAP = new HashMap<>();
@@ -55,12 +62,16 @@ public class Utils {
 		READ_TIMEOUT = Integer.parseInt(rb.getString("read.timeout"));
 		DOWNLOAD_DIR = Paths.get(rb.getString("download.dir"));
 		THREAD_COUNT = Integer.parseInt(rb.getString("thread.count"));
+		BUFFER_SIZE = Integer.parseInt(rb.getString("buffer.size"));
 
 		ResourceBundle.clearCache();
+		MyUtilsException.noError(() -> Files.createDirectories(APP_DATA));
 
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			synchronized (tasks) {
 				tasks.forEach(Runnable::run);
+				if(last_task != null)
+					last_task.run();
 			}
 		}));
 		
@@ -151,10 +162,10 @@ public class Utils {
 	}
 	
 	private static Path frequentMimeFilePath() {
-		return MY_DIR.resolve("frequent-mime-cache.tsv");
+		return APP_DATA.resolve("frequent-mime-cache.tsv");
 	}
 	private static Path allMimeFilePath() {
-		return MY_DIR.resolve("all-mime-cache.tsv");
+		return APP_DATA.resolve("all-mime-cache.tsv");
 	}
 	private static boolean loadMimeCache(Path p, Map<String, String> map) {
 		if(Files.notExists(p))
@@ -190,5 +201,37 @@ public class Utils {
 		} catch (IOException e) {
 			throw new RuntimeException("failed reading \""+filename+"\"", e);
 		}
+	}
+	
+	private static final String[] numbers = new String[100];
+	
+	static {
+		for (int i = 0; i < numbers.length; i++) 
+			numbers[i] = Integer.toString(i);
+	}
+
+	public static String toString(int i) {
+		if(i >= 0 && i < 100)
+			return numbers[i];
+		return Integer.toString(i);
+	}
+
+	public static Config[] configs() throws InstantiationException, IllegalAccessException, ClassNotFoundException, JSONException, IOException {
+		JSONObject json = new JSONObject(new JSONTokener(Files.newInputStream(Paths.get("configs.json"), READ)));
+		Config[] configs = new Config[json.length()];
+
+		int n = 0;
+		for (String s : json.keySet()) 
+			configs[n++] = new Config(s, json.getJSONObject(s));
+		
+		return configs;
+	}
+
+	public static void setLastTask(Runnable last_task) {
+		StackTraceElement t = Thread.currentThread().getStackTrace()[2]; 
+		if(!(t.getFileName().equals(MainView.class.getSimpleName()+".java") && t.getClassName().equals(MainView.class.getName())))
+			throw new IllegalAccessError("only accessfrom: "+MainView.class.getName());
+		
+		Utils.last_task = last_task;
 	}
 }

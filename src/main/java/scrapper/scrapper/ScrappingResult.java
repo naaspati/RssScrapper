@@ -2,6 +2,7 @@ package scrapper.scrapper;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 
 public class ScrappingResult {
 	public static final ScrappingResult COMPLETED = new PredefinedScrappingResult("COMPLETED");
@@ -11,7 +12,7 @@ public class ScrappingResult {
 	private static class PredefinedScrappingResult extends ScrappingResult {
 		private final String s;
 		public PredefinedScrappingResult(String name) {
-			super(null, null);
+			super();
 			this.s = ScrappingResult.class.getSimpleName()+"("+name+")";
 		}
 		@Override
@@ -26,8 +27,13 @@ public class ScrappingResult {
 		public List<String> getUrls() {
 			throw new IllegalAccessError();
 		}
+		@Override
+		public String getUrl() {
+			throw new IllegalAccessError();
+		}
 	} 
 
+	private final String url;
 	private final Path path;
 	private final List<String> urls;
 
@@ -37,8 +43,19 @@ public class ScrappingResult {
 	public List<String> getUrls() {
 		return urls;
 	}
-	public ScrappingResult(Path path, List<String> urls) {
-		this.path = path;
-		this.urls = urls;
+	public String getUrl() {
+		return url;
+	}
+	
+	private ScrappingResult() {
+		this.path = null;
+		this.urls = null;
+		this.url = null;
+	}
+	
+	public ScrappingResult(String url, Path path, List<String> urls) {
+		this.path = Objects.requireNonNull(path);
+		this.urls = Objects.requireNonNull(urls);
+		this.url = Objects.requireNonNull(url);
 	}
 }

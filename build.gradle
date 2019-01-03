@@ -9,18 +9,17 @@ repositories {
 // replacing jaunt -> okHttp
 
 dependencies {
-  //  compile files( 'myutils.jar' )
+   compile files( 'myutils.jar' )
    compile 'org.slf4j:slf4j-jdk14:1.8.0-beta1'
    compile 'org.jsoup:jsoup:+'
    compile 'org.json:json:20180813'
-   // compile 'com.squareup.okhttp3:okhttp:3.12.0'
 }
  
 version = 1.02
 sourceCompatibility = JavaVersion.VERSION_1_8 
 targetCompatibility = JavaVersion.VERSION_1_8
  
-mainClassName = 'Main'
+mainClassName = 'Main2'
 ext.appdir = file(System.env.SAM_PROGRAMS+'\\rss-beta\\bin')
 
 run {

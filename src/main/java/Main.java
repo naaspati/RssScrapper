@@ -11,28 +11,28 @@ import org.slf4j.Logger;
 import javafx.application.Application;
 import sam.console.ANSI;
 import sam.io.fileutils.FileOpener;
+import sam.myutils.System2;
 import scrapper.MainView;
 import scrapper.ScrappingException;
 import scrapper.Utils;
 public class Main {
     public static void main(String[] args) throws ScrappingException, IOException {
+    	Logger logger = Utils.logger(Main.class);
+    	
         if(args.length == 1 && args[0].equals("-v")) {
-            System.out.println("1.015");
+            logger.info(System2.lookup("APP_VERSION"));
             System.exit(0);
         }
-        
-        new File("app_data/logs").mkdirs();
-        System.setProperty("java.util.logging.config.file", "logging.properties");
 
         Thread.setDefaultUncaughtExceptionHandler(new UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
-                Utils.logger(Main.class).error("Thread: "+t.getName(), e);
+                logger.error("Thread: "+t.getName(), e);
             }
         });
         if(args.length == 1) {
             if(args[0].equals("h") || args[0].equals("-h") || args[0].equals("help") || args[0].equals("-help")) {
-                Utils.logger(Main.class)
+                logger
                 .info(  "clean     clean cache\n"+
                         "open      open app dir\n"+
                         "--download   download links in failed-downlods.txt\n"
@@ -40,13 +40,11 @@ public class Main {
             }
 
             if(args[0].equals("clean")) {
-                Logger l = Utils.logger(Main.class);
-                
                 Path p = Paths.get("app_data");
                 if(Files.exists(p)) {
                     Files.walk(p)
                     .sorted(Comparator.comparing(Path::getNameCount).reversed())
-                    .forEach(s -> l.info(s + "  " + (s.toFile().delete() ? ANSI.green("deleted") : ANSI.red("delete failed"))));
+                    .forEach(s -> logger.info(s + "  " + (s.toFile().delete() ? ANSI.green("deleted") : ANSI.red("delete failed"))));
                 }
                     
             }
@@ -62,12 +60,12 @@ public class Main {
             String s = args[i];
             if("--file".equals(s)) {
                 if(args.length < i + 2) {
-                    System.out.println(ANSI.red("no file specified for: --file"));
+                	logger.error(ANSI.red("no file specified for: --file"));
                     System.exit(0);
                 }
                 String file = args[i+1];
                 if(!new File(file).exists()){
-                    System.out.println(ANSI.red("file not found: ")+file);
+                    logger.error(ANSI.red("file not found: ")+file);
                     System.exit(0);
                 }
                 System.setProperty("urls-file", file);

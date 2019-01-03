@@ -27,14 +27,14 @@ public class FailBlog implements Selector {
 		if(list.isEmpty()){
 			List<String> result = testYoutube(doc);
 			if(Checker.isNotEmpty(result))
-				return new ScrappingResult(null, result);
+				return new ScrappingResult(null, null, result);
 			
 			list = doc.getElementsByTag("video");
 			if(!list.isEmpty()) {
 				List<String> l = new ArrayList<>(1);
 				for (Element e : list)
 					l.add(e.attr("data-videosrc"));
-				return new ScrappingResult(dir.resolve(prepareName(doc, url)), l);
+				return new ScrappingResult(url, dir.resolve(prepareName(doc, url)), l);
 			}
 			return EMPTY;
 		}
@@ -46,6 +46,6 @@ public class FailBlog implements Selector {
 				.map(e -> e.attr(e.classNames().contains("lazyload") ? "data-src" :  "src"))
 				.collect(Collectors.toList());
 
-		return new ScrappingResult(folder, list2);    
+		return new ScrappingResult(url, folder, list2);    
 	}
 }

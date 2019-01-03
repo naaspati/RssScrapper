@@ -1,8 +1,6 @@
 package scrapper;
-import static java.nio.file.StandardOpenOption.READ;
 import static sam.console.ANSI.FINISHED_BANNER;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -12,20 +10,17 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.json.JSONException;
-import org.json.JSONObject;
-import org.json.JSONTokener;
 import org.slf4j.Logger;
 
 import javafx.application.Application;
@@ -33,28 +28,24 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Alert.AlertType;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.Dialog;
-import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
-import javafx.scene.control.TextArea;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.Text;
 import javafx.stage.Stage;
+import sam.collection.ArraysUtils;
 import sam.console.ANSI;
 import sam.fx.alert.FxAlert;
 import sam.fx.clipboard.FxClipboard;
+import sam.fx.dialog.TextAreaDialog;
 import sam.io.fileutils.FileOpenerNE;
 import sam.io.serilizers.StringWriter2;
 import sam.myutils.Checker;
 import sam.myutils.MyUtilsCmd;
 import sam.string.StringBuilder2;
-import scrapper.scrapper.Config;
-import scrapper.scrapper.Handler;
+import sam.string.StringUtils;
 
 public final class MainView extends Application {
 	private Logger logger = Utils.logger(getClass());
@@ -63,13 +54,8 @@ public final class MainView extends Application {
 	private final  ProgressBar progressBar = new ProgressBar();
 	private final VBox progressBox = new VBox(5);
 	private static Stage stage;
-	private final Label status = new Label();
+	private final Text status = new Text();
 	private final BorderPane root = new BorderPane();
-
-	{
-		status.setMaxWidth(Double.MAX_VALUE);
-		status.setStyle("-fx-background-color:black;-fx-text-fill:white;-fx-font-width:bold;-fx-font-size:10;-fx-font-family:'Courier New';-fx-padding:2");
-	}
 
 	public static Stage getStage() {
 		return stage;
@@ -93,12 +79,14 @@ public final class MainView extends Application {
 		sp.setFitToHeight(true);
 		sp.setPrefHeight(200);
 
-		root.setCenter(new VBox(10, progressBar, infoBoxes, sp));
-		root.setBottom(status);
+		BorderPane.setMargin(status, new Insets(0, 5, 0, 10));
+		BorderPane.setAlignment(status, Pos.CENTER);
+		root.setTop(new BorderPane(progressBar, null, status, null, null));
+		root.setCenter(infoBoxes);
 		Scene scene = new Scene(root);
 		stage.setScene(scene);
 
-		scene.getStylesheets().add(ClassLoader.getSystemResource("style.css").toString());
+		scene.getStylesheets().add("style.css");
 
 		start2(urls);
 
@@ -107,26 +95,21 @@ public final class MainView extends Application {
 		stage.show();
 	}
 
-	private ConfigWrapper[] _configs;
+	private ConfigWrapper[] configs;
 	private static final Object CONFIGS_LOCK = new Object(); 
-	private ExecutorService ex;
+	private ThreadPoolExecutor ex;
 
 	private void start2(final Collection<String> urls) throws IOException, InstantiationException, IllegalAccessException, URISyntaxException, ClassNotFoundException, JSONException {
 		if(urls.isEmpty()){
-			System.out.println(ANSI.red("no urls specified"));
+			logger.error(ANSI.red("no urls specified"));
 			System.exit(0);
 		}
 
-		JSONObject json = new JSONObject(new JSONTokener(Files.newInputStream(Paths.get("configs.json"), READ)));
-		this._configs = new ConfigWrapper[json.length()];
-
-		int n = 0;
-		for (String s : json.keySet()) 
-			_configs[n++] = new ConfigWrapper(s, json.getJSONObject(s));	
+		this.configs = ArraysUtils.map(Utils.configs(), ConfigWrapper[]::new, ConfigWrapper::new);
 
 		List<String> unhandled = new ArrayList<>();
 		urls.forEach(url -> {
-			for (ConfigWrapper c : _configs) {
+			for (ConfigWrapper c : configs) {
 				if(c.accepts(url)) 
 					return;
 			}
@@ -134,61 +117,58 @@ public final class MainView extends Application {
 		});
 
 		if(unhandled.size() == urls.size()) {
-			System.out.println(ANSI.red("ALL BAD URLS"));
+			logger.error(ANSI.red("ALL BAD URLS"));
 			Files.createDirectories(Utils.DOWNLOAD_DIR);
 			Files.write(Utils.DOWNLOAD_DIR.resolve("bad-urls.txt"), unhandled, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
 			System.exit(0);
 		}
 
-		ConfigWrapper[] temp = new ConfigWrapper[_configs.length];
-		n = 0;
-		for (ConfigWrapper c : _configs) {
-			if(c.config.disable || c.urls.isEmpty())
+		configs = ArraysUtils.removeIf(configs, c -> {
+			if(c.isDisabled() || c.isEmpty()) {
 				c.close();
-			else
-				temp[n++] = c;
-		}
+				return true;
+			}
+			return false;
+		});
 
-		if(n == 0) {
+		if(configs.length == 0) {
 			logger.info(ANSI.red("NOTHING TO PROCESS"));
 			Platform.exit();
 			return;
 		}
 
-		if(n != _configs.length)
-			_configs = Arrays.copyOf(temp, n);
-
-		temp = null;
-
 		StringBuilder2 sb = new StringBuilder2();
-		sb.yellow("configs: ").append(_configs.length).append('\n');
-		int max = Arrays.stream(_configs).mapToInt(s -> s.name().length()).max().getAsInt();
+		sb.yellow("configs: ").append(configs.length).append('\n');
+		int max = Arrays.stream(configs).mapToInt(s -> s.name().length()).max().getAsInt();
 		String format =  ANSI.yellow("%"+(max+5)+"s")+": %s\n";
 
-		for (ConfigWrapper c : _configs) 
-			sb.format(format, c.name(), c.urls.size());
+		for (ConfigWrapper c : configs) 
+			sb.format(format, c.name(), c.size());
 
 		sb.ln().ln();
 		logger.info(sb.toString());
 		sb = null;
 
-		ex = Executors.newFixedThreadPool(Utils.THREAD_COUNT);
+		ex = (ThreadPoolExecutor) Executors.newFixedThreadPool(Utils.THREAD_COUNT);
 		addShutdownHook();
 
-		synchronized (CONFIGS_LOCK) {
-			for (ConfigWrapper c : _configs) {
+		synchronized(CONFIGS_LOCK) {
+			for (int i = 0; i < configs.length; i++) {
+				ConfigWrapper c = configs[i];
+
 				try {
-					c.start(ex);
+					infoBoxes.getChildren().add(c.start(ex));
 				} catch (IOException e) {
 					logger.error("failed add tasks: "+c.toString(), e);
-					c.remaining_urls = new AtomicInteger();
+					configs[i] = null;
 				}
-			}	
+			}
+			configs = ArraysUtils.removeIf(configs, Objects::isNull);
 		}
 
 		stage.setTitle("Running");
 		ex.execute(new CheckRemainingUrls());
-		
+
 		Thread progressThread = new Thread(new ProgressUpdater());
 		progressThread.start();
 
@@ -206,33 +186,16 @@ public final class MainView extends Application {
 			}
 		});
 	}
-	
-	private class ProgressUpdater implements Runnable {
-		@Override
-		public void run() {
-			//TODO
-			
-			while(true) {
-				try {
-					Thread.sleep(1000);
-					// codes in WaitTask
-				} catch (InterruptedException e) {
-					logger.info("killing updater thread");
-					break;
-				}
-			}
-		}
-	}
-	
+
 	private void addShutdownHook() {
-		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+		Utils.setLastTask(() -> {
 			synchronized(CONFIGS_LOCK) {
 				StringBuilder failed = new StringBuilder();
 				StringBuilder empty = new StringBuilder();
 
-				for (ConfigWrapper c : _configs) {
-					if(c.handler != null)
-						c.handler.append(failed, empty);
+				for (ConfigWrapper c : configs) {
+					c.close();
+					c.append(failed, empty);
 				}
 
 				write(Utils.DOWNLOAD_DIR.resolve("failed.txt"), failed);
@@ -242,7 +205,48 @@ public final class MainView extends Application {
 				MyUtilsCmd.beep(5);
 				logger.info("\n\n"+FINISHED_BANNER);
 			}
-		}));
+		});
+	}
+
+	private class ProgressUpdater implements Runnable {
+		AtomicInteger mod = new AtomicInteger(0); 
+
+		@Override
+		public void run() {
+			while(true) {
+				if(ex.isTerminated())
+					break;
+
+				int n = mod.incrementAndGet();
+
+				try {
+					Thread.sleep(1000);
+					Platform.runLater(() -> {
+						if(n != mod.get())
+							return;
+
+						synchronized (CONFIGS_LOCK) {
+							if(n != mod.get())
+								return;
+
+							int total = 0;
+							int progress = 0;
+
+							for (ConfigWrapper c : configs) {
+								c.update();
+								total += c.getCurrentTotal();
+								progress += c.getProgress();
+							}
+							progressBar.setProgress(((double)total)/progress);
+							status.setText(Utils.toString(progress)+"/"+Utils.toString(progress));
+						}
+					});
+				} catch (InterruptedException e) {
+					logger.info("killing updater thread");
+					break;
+				}
+			}
+		}
 	}
 
 	private void write(Path path, StringBuilder sb) {
@@ -257,21 +261,39 @@ public final class MainView extends Application {
 	}
 
 	private class CheckRemainingUrls implements Runnable {
+		private final boolean sleep;
+		
+		CheckRemainingUrls() {
+			sleep = false;
+		}
+		CheckRemainingUrls(boolean sleep) {
+			this.sleep = sleep;
+		}
 
 		@Override
 		public void run() {
-
+			if(sleep) {
+				logger.debug("sleeping: CheckRemainingUrls");
+				try {
+					Thread.sleep(2000);
+				} catch (InterruptedException e) {
+					logger.warn("Interrupted: CheckRemainingUrls, skipping startWaitTask();");	
+					return;
+				}
+			}
+			
 			synchronized (CONFIGS_LOCK) {
-				for (ConfigWrapper c : _configs) {
+				logger.debug("check if to startWaitTask()");
+
+				for (ConfigWrapper c : configs) {
 					if(!c.isUrlsCompleted()) {
-						ex.execute(new CheckRemainingUrls());
+						ex.execute(new CheckRemainingUrls(ex.getActiveCount() < ex.getMaximumPoolSize()));
 						return;
 					}
 				}	
 			}
 			startWaitTask();
 		}
-
 	}
 
 	private void startWaitTask() {
@@ -288,108 +310,21 @@ public final class MainView extends Application {
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
+			System.exit(0);
 		});
 		thread.start();
 	} 
 
-	private class ConfigWrapper implements Closeable {
-		final Config config;
-		final List<String> urls = new ArrayList<>();
-		InfoBox box;
-		Handler handler;
-		boolean closed;
-		AtomicInteger remaining_urls;
 
-		ConfigWrapper(String name, JSONObject json) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
-			this.config = new Config(name, json);
-		}
-		boolean accepts(String url) {
-			if(config.accepts(url)) {
-				urls.add(url);
-				return true;
-			}
-			return false;
-		}
-		void start(ExecutorService ex) throws IOException {
-			if(urls.isEmpty() || config.disable) {
-				remaining_urls = new AtomicInteger(0);
-				return;
-			}
-
-			if(box != null)
-				throw new IllegalStateException();
-
-			box = new InfoBox(name());
-			handler = new Handler(config);
-			infoBoxes.getChildren().add(box);
-
-			remaining_urls = handler.handle(urls, ex);
-		}
-		String name () {
-			return config.name();
-		}
-		boolean isUrlsCompleted() {
-			return remaining_urls.get() == 0;
-		}
-
-		@Override
-		public void close() throws IOException {
-			if(closed) 
-				throw new IllegalStateException();
-			closed = true;
-			config.close();
-			if(handler != null)
-				handler.close();
-		}
-
-		@Override
-		public String toString() {
-			return config.toString();
-		}
-	}
-	private Collection<String> inputDialog() {
-		Dialog<ButtonType> tt = new Dialog<>();
+	private Set<String> inputDialog() {
+		TextAreaDialog tt = new TextAreaDialog();
 		tt.setTitle("RSS OWL");
-		TextArea ta = new TextArea();
-		ta.setPrefRowCount(20);
 
 		Optional.ofNullable(FxClipboard.getString())
 		.filter(s -> !Checker.isEmptyTrimmed(s))
-		.ifPresent(ta::setText);
+		.ifPresent(tt::setContent);
 
-		tt.getDialogPane().setExpandableContent(ta);
-		tt.getDialogPane().setExpanded(true);
 		tt.setHeaderText("Enter Urls seperated by newline");
-		tt.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-
-		Set<String> ret = new LinkedHashSet<>();
-
-		ta.textProperty().addListener(i -> Platform.runLater(() -> {
-			String strs = ta.getText();
-			ret.clear();
-
-			if(strs != null && !(strs = strs.trim()).isEmpty()) {
-				Stream.of(strs.split("\r?\n"))
-				.map(s -> s.replace('"', ' ').trim())
-				.filter(s -> !s.isEmpty())
-				.forEach(ret::add);                
-			}
-			tt.setContentText("Total: "+ret.size());
-		}));
-
-		tt.setResultConverter(b -> b);
-		Optional<ButtonType> bt = tt.showAndWait();
-		if(!bt.isPresent() || bt.get() != ButtonType.OK)
-			ret.clear();
-		else if(ret.isEmpty()) {
-			Alert alert = new Alert(AlertType.ERROR);
-			alert.setHeaderText("no input");
-			alert.showAndWait();
-		}
-
-		if(ret.isEmpty())
-			System.exit(0);
-
-		return ret;
+		return tt.showAndWait().map(StringUtils::splitAtNewlineStream).map(s -> s.collect(Collectors.toSet())).orElse(null);
 	}
 }

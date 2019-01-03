@@ -1,11 +1,11 @@
 .root {
 	-fx-background-color:white;
+	-fx-font-family:'Consolas';
 }
 .info-box {
 	-fx-border-width:1;
 	-fx-border-color:lightgray;
 	-fx-font-size:15;
-	-fx-font-family:'Kristen ITC';
 	-fx-padding:10;
 	-fx-background-color:white;
 	-fx-effect:dropshadow(three-pass-box, rgba(0,0,0,0.1),0.1,0,2,2);
@@ -19,13 +19,19 @@
 }
 
 .info-box .progress-text {
- 	-fx-fill:#6B8E23;
+ 	-fx-fill:blue;
 }
 .info-box .failed-text {
  	-fx-fill:crimson;
 }
 .info-box .total-text {
  	-fx-fill:#2E8B57;
+}
+.info-box .name-text {
+ 	-fx-font-size: 0.9em;
+}
+.info-box .sub {
+ 	-fx-font-size: 0.7em;
 }
 
 

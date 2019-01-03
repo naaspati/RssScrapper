@@ -4,20 +4,6 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 
 private class WaitTask implements Runnable {
-	private void info(String format, Object...obj) {
-		logger.info(format, obj);
-	}
-	private void info(String msg) {
-		logger.info(msg);
-	}
-	private void showErrorAndExit(String str) {
-		Alert al = new Alert(AlertType.ERROR);
-		al.setHeaderText(str);
-		al.setTitle("error");
-		al.showAndWait();
-		System.exit(0);
-	}
-	
 	@Override
 	public void run() {
 		while(true) {
