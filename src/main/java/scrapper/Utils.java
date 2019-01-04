@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import sam.myutils.MyUtilsException;
+import sam.myutils.MyUtilsPath;
 import sam.string.StringUtils.StringSplitIterator;
 import scrapper.scrapper.Config;
 
@@ -200,6 +201,7 @@ public class Utils {
 	}
 	
 	private static final String[] numbers = new String[100];
+	public static final Path TEMP_DIR = MyUtilsPath.TEMP_DIR;
 	
 	static {
 		for (int i = 0; i < numbers.length; i++) 

@@ -11,13 +11,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.json.JSONException;
@@ -104,6 +104,7 @@ public final class MainView extends Application {
 	}
 
 	private ConfigWrapper[] configs;
+	private final AtomicInteger active_config = new AtomicInteger(0);
 	private static final Object CONFIGS_LOCK = new Object(); 
 	private ThreadPoolExecutor ex;
 
@@ -150,8 +151,10 @@ public final class MainView extends Application {
 		int max = Arrays.stream(configs).mapToInt(s -> s.name().length()).max().getAsInt();
 		String format =  ANSI.yellow("%"+(max+5)+"s")+": %s\n";
 
-		for (ConfigWrapper c : configs) 
+		for (ConfigWrapper c : configs) {
+			infoBoxes.getChildren().add(c.noMoreUrls());
 			sb.format(format, c.name(), c.size());
+		}
 
 		sb.ln().ln();
 		logger.info(sb.toString());
@@ -160,22 +163,11 @@ public final class MainView extends Application {
 		ex = (ThreadPoolExecutor) Executors.newFixedThreadPool(Utils.THREAD_COUNT);
 		addShutdownHook();
 
-		synchronized(CONFIGS_LOCK) {
-			for (int i = 0; i < configs.length; i++) {
-				ConfigWrapper c = configs[i];
-
-				try {
-					infoBoxes.getChildren().add(c.start(ex));
-				} catch (IOException e) {
-					logger.error("failed add tasks: "+c.toString(), e);
-					configs[i] = null;
-				}
-			}
-			configs = ArraysUtils.removeIf(configs, Objects::isNull);
-		}
+		active_config.set(0);
+		configs[0].start(ex);
 
 		stage.setTitle("Running");
-		ex.execute(new CheckRemainingUrls());
+		ex.execute(new CheckRemainingUrls(0));
 
 		Thread progressThread = new Thread(new ProgressUpdater());
 		progressThread.start();
@@ -233,8 +225,6 @@ public final class MainView extends Application {
 
 				try {
 					Thread.sleep(1000);
-					System.out.println("update");
-
 					Platform.runLater(() -> {
 						synchronized (CONFIGS_LOCK) {
 							int total = 0;
@@ -245,8 +235,10 @@ public final class MainView extends Application {
 								total += c.getCurrentTotal();
 								progress += c.getProgress();
 							}
-							progressBar.setProgress(((double)total)/progress);
-							status.setText(Utils.toString(progress)+"/"+Utils.toString(progress));
+
+							progressBar.setProgress(progress/((double)total));
+							status.setText(Utils.toString(progress)+"/"+Utils.toString(total));
+
 							try {
 								queue.put(OBJECT);
 							} catch (InterruptedException e) {
@@ -275,38 +267,47 @@ public final class MainView extends Application {
 	}
 
 	private class CheckRemainingUrls implements Runnable {
-		private final boolean sleep;
+		private final int index;
 
-		CheckRemainingUrls() {
-			sleep = false;
+		CheckRemainingUrls(int index) {
+			this(index, false);
 		}
-		CheckRemainingUrls(boolean sleep) {
-			this.sleep = sleep;
+		CheckRemainingUrls(int index, boolean sleep) {
+			this.index = index;
 		}
 
 		@Override
 		public void run() {
-			if(sleep) {
-				logger.debug("sleeping: CheckRemainingUrls");
-				try {
-					Thread.sleep(2000);
-				} catch (InterruptedException e) {
-					logger.warn("Interrupted: CheckRemainingUrls, skipping startWaitTask();");	
-					return;
-				}
-			}
-
 			synchronized (CONFIGS_LOCK) {
-				logger.debug("check if to startWaitTask()");
+				ConfigWrapper c = index >= configs.length ? null : configs[index];
+				logger.debug("1: check if: isUrlsCompleted()"+(c == null ? null : c.name()));
 
-				for (ConfigWrapper c : configs) {
-					if(!c.isUrlsCompleted()) {
-						ex.execute(new CheckRemainingUrls(ex.getActiveCount() < ex.getMaximumPoolSize()));
+				if(c == null)
+					startWaitTask();
+				else if(c.isUrlsCompleted()) {
+					logger.debug("found isUrlsCompleted(): "+c.name());	
+					for (int i = index + 1; i < configs.length; i++) {
+						try {
+							configs[i].start(ex);
+							logger.debug("started: {}", c);
+							ex.execute(new CheckRemainingUrls(i));
+							return;
+						} catch (IOException e) {
+							logger.error("failed to start: "+c, e);
+						}	
+					}
+					startWaitTask();
+				} else {
+					logger.debug("sleeping: CheckRemainingUrls");
+					try {
+						Thread.sleep(2000);
+					} catch (InterruptedException e) {
+						logger.warn("Interrupted: CheckRemainingUrls, skipping startWaitTask();");	
 						return;
 					}
-				}	
+					ex.execute(new CheckRemainingUrls(index));
+				} 
 			}
-			startWaitTask();
 		}
 	}
 

@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 
 import javafx.application.Platform;
+import sam.myutils.ThrowException;
 import scrapper.scrapper.Config;
 import scrapper.scrapper.Handler;
 
@@ -23,30 +24,45 @@ class ConfigWrapper implements Closeable {
 	private boolean closed;
 	private AtomicInteger remaining_urls;
 	private int total;
+	private boolean noMoreUrls;
+	private volatile boolean started;
 
 	ConfigWrapper(Config config) {
 		this.config = config;
 	}
 	boolean accepts(String url) {
+		checkNoMoreUrls();
+			
 		if(config.accepts(url)) {
 			urls.add(url);
 			return true;
 		}
 		return false;
 	}
-	InfoBox start(ExecutorService ex) throws IOException {
-		if(urls.isEmpty() || config.disable || box != null) 
+	private void checkNoMoreUrls() {
+		if(noMoreUrls)
+			ThrowException.illegalStateException("set: no more urls");
+	}
+	public InfoBox noMoreUrls() {
+		checkNoMoreUrls();
+		this.noMoreUrls = true;
+		
+		if(!noMoreUrls && urls.isEmpty() || config.disable || box != null) 
 			throw new IllegalStateException();
 
 		box = new InfoBox(name());
 		this.total = urls.size();
 		box.main.total.setText(Utils.toString(total));
-		handler = new Handler(config);
-
-		remaining_urls = handler.handle(urls, ex);
-		Platform.runLater(this::update);
-
+		
 		return box;
+	}
+	void start(ExecutorService ex) throws IOException {
+		if(!noMoreUrls || started) 
+			throw new IllegalStateException("!noMoreUrls:"+(!noMoreUrls)+" || started:"+started);
+		
+		this.started = true;
+		handler = new Handler(config);
+		remaining_urls = handler.handle(urls, ex);
 	}
 	String name () {
 		return config.name();
@@ -54,7 +70,7 @@ class ConfigWrapper implements Closeable {
 	boolean isUrlsCompleted() {
 		return remaining_urls.get() == 0;
 	}
-
+	
 	@Override
 	public void close() {
 		if(closed) 
@@ -103,9 +119,12 @@ class ConfigWrapper implements Closeable {
 	}
 	
 	public void update() {
+		if(!started)
+			return;
+		
 		int t0 = total;
 		int f0 = handler.getScrapFailedCount();
-		int c0 = total - remaining_urls.get() - f0;
+		int c0 = t0 - remaining_urls.get() - f0;
 		
 		box.main.completed.setText(Utils.toString(c0));
 		box.main.failed.setText(Utils.toString(f0));

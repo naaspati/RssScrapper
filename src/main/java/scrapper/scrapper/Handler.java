@@ -84,7 +84,7 @@ public class Handler implements Closeable {
 	}
 
 	private static final Logger LOGGER = Utils.logger(Handler.class);
-	private static final Path MY_DIR = Utils.APP_DATA.resolve( Handler.class.getName());
+	private static final Path MY_DIR = Utils.TEMP_DIR.resolve( Handler.class.getName());
 
 	private final Config config;
 
@@ -359,12 +359,13 @@ public class Handler implements Closeable {
 						if(config.downloader.download(u, path)) {
 							completed.succeed(u);
 							completed_subdownload.incrementAndGet();
-						} else 
+						} else  {
 							completed.failed(u);
-						
+							failed_subdownload.incrementAndGet();
+						}
 					} catch (IOException|ScrappingException e) {
 						LOGGER.warn("FAILED: "+u+", error: "+e);
-						failed_subdownload.decrementAndGet();
+						failed_subdownload.incrementAndGet();
 						completed.failed(u);
 					}
 				});	

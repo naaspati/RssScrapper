@@ -13,6 +13,9 @@ public class Main2 {
 		g.warn("anime");
 		g.info("anime-2");
 		g.warn("anime-2");
+		g.debug("aanie");
+		
+		System.out.println(g.isDebugEnabled());
 	}
 
 }

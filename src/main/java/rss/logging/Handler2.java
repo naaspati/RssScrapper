@@ -28,6 +28,11 @@ public class Handler2 extends Handler {
 			} 
 		});
 	}
+	@Override
+	public boolean isLoggable(LogRecord record) {
+		return "scrapper.MainView".equals(record.getLoggerName());
+		//return super.isLoggable(record);
+	}
 
 	private final StringBuilder sb = new StringBuilder();
 	private final boolean debug, disable;
@@ -47,11 +52,12 @@ public class Handler2 extends Handler {
 			return;
 
 		sb.append('\n');
-		
+
 		char[] buffer = new char[sb.length()];
 		sb.getChars(0, sb.length(), buffer, 0);
-		
-		System.out.print(buffer);
+
+		if("scrapper.MainView".equals(record.getLoggerName()))
+			System.out.print(buffer);
 
 		try {
 			WRITER.write(buffer);
@@ -99,6 +105,6 @@ public class Handler2 extends Handler {
 	}
 	@Override
 	public void close() throws SecurityException {
-		
+
 	}
 }

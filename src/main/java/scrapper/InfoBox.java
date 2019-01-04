@@ -7,9 +7,9 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 final class InfoBox extends VBox {
 	static class CountBox extends HBox {
-		final Text completed = new Text("11");
-		final Text total = new Text("11");
-		final Text failed = new Text("11");
+		final Text completed = new Text("--");
+		final Text total = new Text("--");
+		final Text failed = new Text("--");
 
 		public CountBox() {
 			super(5);
