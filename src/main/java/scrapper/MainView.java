@@ -15,9 +15,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.json.JSONException;
@@ -40,6 +40,7 @@ import sam.console.ANSI;
 import sam.fx.alert.FxAlert;
 import sam.fx.clipboard.FxClipboard;
 import sam.fx.dialog.TextAreaDialog;
+import sam.fx.popup.FxPopupShop;
 import sam.io.fileutils.FileOpenerNE;
 import sam.io.serilizers.StringWriter2;
 import sam.myutils.Checker;
@@ -63,9 +64,16 @@ public final class MainView extends Application {
 	@Override
 	public void start(Stage stage) throws Exception {
 		MainView.stage = stage;
+		FxAlert.setParent(stage);
+		FxPopupShop.setParent(stage);
 
 		boolean isDownload = getParameters().getRaw().contains("--download");
 		final Collection<String> urls =  isDownload ? null : System.getProperty("urls-file") == null ? inputDialog() : Files.lines(Paths.get(System.getProperty("urls-file"))).distinct().collect(Collectors.toList());
+
+		if(Checker.isEmpty(urls)) {
+			logger.warn(ANSI.red("no input"));
+			System.exit(0);
+		}
 
 		infoBoxes.setPrefColumns(3);
 		infoBoxes.setAlignment(Pos.CENTER);
@@ -173,12 +181,16 @@ public final class MainView extends Application {
 		progressThread.start();
 
 		stage.setOnCloseRequest(e -> {
+			System.out.println("here");
 			if(!FxAlert.showConfirmDialog(null, "sure to close"))
 				e.consume();
 			else {
+				stage.hide();
+				logger.info("shutting down: ExecutorService");
 				ex.shutdownNow();
 				try {
 					ex.awaitTermination(5, TimeUnit.SECONDS);
+					logger.info("shut down: ExecutorService");
 				} catch (InterruptedException e1) {
 					e1.printStackTrace();
 				}
@@ -208,8 +220,10 @@ public final class MainView extends Application {
 		});
 	}
 
+	private static final Object OBJECT = new Object();
+
 	private class ProgressUpdater implements Runnable {
-		AtomicInteger mod = new AtomicInteger(0); 
+		final SynchronousQueue<Object> queue = new SynchronousQueue<>(); 
 
 		@Override
 		public void run() {
@@ -217,18 +231,12 @@ public final class MainView extends Application {
 				if(ex.isTerminated())
 					break;
 
-				int n = mod.incrementAndGet();
-
 				try {
 					Thread.sleep(1000);
+					System.out.println("update");
+
 					Platform.runLater(() -> {
-						if(n != mod.get())
-							return;
-
 						synchronized (CONFIGS_LOCK) {
-							if(n != mod.get())
-								return;
-
 							int total = 0;
 							int progress = 0;
 
@@ -239,8 +247,14 @@ public final class MainView extends Application {
 							}
 							progressBar.setProgress(((double)total)/progress);
 							status.setText(Utils.toString(progress)+"/"+Utils.toString(progress));
+							try {
+								queue.put(OBJECT);
+							} catch (InterruptedException e) {
+								e.printStackTrace();
+							}
 						}
 					});
+					queue.take();
 				} catch (InterruptedException e) {
 					logger.info("killing updater thread");
 					break;
@@ -262,7 +276,7 @@ public final class MainView extends Application {
 
 	private class CheckRemainingUrls implements Runnable {
 		private final boolean sleep;
-		
+
 		CheckRemainingUrls() {
 			sleep = false;
 		}
@@ -281,7 +295,7 @@ public final class MainView extends Application {
 					return;
 				}
 			}
-			
+
 			synchronized (CONFIGS_LOCK) {
 				logger.debug("check if to startWaitTask()");
 
@@ -323,6 +337,12 @@ public final class MainView extends Application {
 		Optional.ofNullable(FxClipboard.getString())
 		.filter(s -> !Checker.isEmptyTrimmed(s))
 		.ifPresent(tt::setContent);
+
+		Path p = Utils.DOWNLOAD_DIR;
+		if(Files.exists(p))
+			tt.setImportDir(p.toFile());
+		else if(Files.exists(p = Utils.DOWNLOAD_DIR.getParent()))
+			tt.setImportDir(p.toFile());
 
 		tt.setHeaderText("Enter Urls seperated by newline");
 		return tt.showAndWait().map(StringUtils::splitAtNewlineStream).map(s -> s.collect(Collectors.toSet())).orElse(null);

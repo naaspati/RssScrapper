@@ -28,12 +28,14 @@ import org.jsoup.helper.HttpConnection;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import scrapper.Utils;
 import scrapper.scrapper.UrlFilter.DefaultUrlFilter;
 import scrapper.scrapper.UrlFilter.SpecializedUrlFilter;
+import static scrapper.scrapper.ConfigKeys.*;
 
-public final class Config implements ConfigKeys, Closeable {
+public final class Config implements Closeable {
 	private static final Logger LOGGER = Utils.logger(Config.class);
 	private static final Set<String> query_selectors = new HashSet<>();
 	
@@ -42,18 +44,17 @@ public final class Config implements ConfigKeys, Closeable {
 	public final int timeout;
 	public final Boolean followRedirects;
 	public final boolean disable;
-	public final int priority;
 
-	final UrlFilter urlFilter;
-	final Selector selector; 
-	final Downloader downloader;
+	public final UrlFilter urlFilter;
+	public final Selector selector; 
+	public final Downloader downloader;
 
 	final Logger selectorLogger;
 
 	private final Map<String, String> cookies, headers;
 
-	static final Path COMMONS_DIR = DOWNLOAD_DIR.resolve("commons");
-	static final Set<String> ALL_KEYS;
+	private static final Path COMMONS_DIR = DOWNLOAD_DIR.resolve("commons");
+	private static final Set<String> ALL_KEYS;
 
 	static {
 		Set<String> set = new HashSet<>();
@@ -95,10 +96,9 @@ public final class Config implements ConfigKeys, Closeable {
 		
 		try {
 			urlFilter = urlFilter(json);
-			priority = urlFilter.priority();
 
 			selector = disable ? null : selector(json);
-			selectorLogger = disable ? null : Utils.logger(name);
+			selectorLogger = disable ? null : LoggerFactory.getLogger(name);
 			downloader = disable ? null : downloader(json); 
 		} catch (Exception e) {
 			throw new IllegalStateException("failed init: \n"+name+": "+json.toString(4), e);

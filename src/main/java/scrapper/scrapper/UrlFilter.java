@@ -10,9 +10,9 @@ import java.util.regex.Pattern;
 
 import sam.myutils.Checker;
 
+@FunctionalInterface
 public interface UrlFilter {
 	public boolean accepts(String url);
-	public int priority();
 
 	String STARTS_WITH = "startsWith";
 	String CONTAINS = "contains";
@@ -52,10 +52,6 @@ public interface UrlFilter {
 		@Override
 		public String toString() {
 			return getClass().getSimpleName()+" ["+STARTS_WITH+"=\""+s1+"\"]";
-		}
-		@Override
-		public int priority() {
-			return priority0(Integer.MAX_VALUE - BASE_OF_BASE*2, s1);
 		}
 	}
 
@@ -97,10 +93,6 @@ public interface UrlFilter {
 		}
 		public boolean isValid() {
 			return filter != null;
-		}
-		@Override
-		public int priority() {
-			return priority0(Integer.MAX_VALUE - 10 * BASE_OF_BASE, toString);
 		}
 		@Override
 		public String toString() {

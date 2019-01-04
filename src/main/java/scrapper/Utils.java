@@ -55,7 +55,6 @@ public class Utils {
 	private static int frequent_initial_size;
 
 	static {
-		System.out.println("Config: initiated");
 		ResourceBundle rb = ResourceBundle.getBundle("config");
 
 		CONNECT_TIMEOUT = Integer.parseInt(rb.getString("connect.timeout"));
@@ -113,9 +112,6 @@ public class Utils {
 
 	public static Logger logger(Class<?> cls) {
 		return LoggerFactory.getLogger(cls);
-	}
-	public static Logger logger(String loggername) {
-		return LoggerFactory.getLogger(loggername);
 	}
 	
 	private static void writeMimeCache(Path p, Map<String, String> map) {

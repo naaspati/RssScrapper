@@ -58,4 +58,5 @@ public class ScrappingResult {
 		this.urls = Objects.requireNonNull(urls);
 		this.url = Objects.requireNonNull(url);
 	}
+	
 }

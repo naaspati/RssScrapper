@@ -26,11 +26,7 @@ public class CodePen implements UrlFilter, Closeable, Settable {
 	private List<String> newPens;
 	private Path existingPensPath;
 	private String prefix;
-
-	@Override
-	public int priority() {
-		return 0;
-	}
+	
 	@Override
 	public void set(InitializeAs initializeAs, String key, Object value) {
 		if(initializeAs != InitializeAs.URL_FILTER)
