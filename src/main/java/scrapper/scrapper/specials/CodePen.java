@@ -7,7 +7,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -52,10 +51,7 @@ public class CodePen implements UrlFilter, Closeable, Settable {
 		Path exist_path = Utils.APP_DATA.resolve("existing-pens.txt");
 
 		if(Files.exists(exist_path)) {
-			Set<String> existing = Files.lines(exist_path)
-					.filter(s -> !s.isEmpty() && s.charAt(0) != '#')
-					.collect(Collectors.toSet());
-
+			Set<String> existing = Utils.lines(exist_path).collect(Collectors.toSet());
 			newPens.removeIf(existing::contains);
 		}
 		
@@ -65,17 +61,11 @@ public class CodePen implements UrlFilter, Closeable, Settable {
 		}
 
 		Files.createDirectories(DOWNLOAD_DIR);
-		write(DOWNLOAD_DIR.resolve("codepen.urls.txt"), newPens, logger);
+		Path cpath = DOWNLOAD_DIR.resolve("codepen.urls.txt");
+		Files.write(cpath, newPens, CREATE, APPEND);
+		logger.info("created:("+newPens.size()+") "+cpath);
 		
-		newPens.add(0, "# "+LocalDateTime.now());
-		newPens.add("");
-		write(exist_path, newPens, logger);
-		
+		Utils.writeWithDate(newPens, exist_path, logger);
 		newPens.clear();
-	}
-
-	private void write(Path path, List<String> list, Logger logger) throws IOException {
-		Files.write(path, list, CREATE, APPEND);
-		logger.info("created:("+list.size()+") "+path);
 	}
 }

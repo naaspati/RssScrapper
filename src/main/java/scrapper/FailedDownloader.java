@@ -1,3 +1,4 @@
+package scrapper;
 import static sam.console.ANSI.red;
 
 import java.io.IOException;
@@ -14,9 +15,7 @@ import sam.console.ANSI;
 import sam.myutils.Checker;
 import sam.myutils.MyUtilsCmd;
 import sam.nopkg.Junk;
-import scrapper.Utils;
-import scrapper.scrapper.Handler;
-import scrapper.scrapper.Handler.DUrls;
+import scrapper.Handler.DUrls;
 
 public class FailedDownloader {
 	private final Logger logger = Utils.logger(getClass());
@@ -40,13 +39,13 @@ public class FailedDownloader {
 		}
 	}
     
-    FailedDownloader() throws IOException {
+    public FailedDownloader() throws IOException {
         if(Files.notExists(Utils.DOWNLOAD_DIR)) {
             logger.error(red("file not found: ")+Utils.DOWNLOAD_DIR);
             return;
         }
         
-        Handler[] handlers = Handler.loadCached(); 
+        Handler[] handlers = Handler.loadCached();
         
         if(Checker.isEmpty(handlers)){
             logger.info(red("no failed found "));

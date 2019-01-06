@@ -3,6 +3,7 @@ package rss.logging;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Writer;
 import java.util.Optional;
 import java.util.logging.ErrorManager;
 import java.util.logging.Filter;
@@ -11,45 +12,29 @@ import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
 
-import sam.myutils.MyUtilsException;
 import sam.myutils.MyUtilsPath;
 import sam.string.StringWriter2;
-import scrapper.Utils;
 
-// import sam.logging.LogFilter;
 
 public class LogHandler extends Handler {
-	private static final FileWriter WRITER;
-
-	static {
-		WRITER = MyUtilsException.noError(() -> new FileWriter(MyUtilsPath.TEMP_DIR.resolve("log-"+MyUtilsPath.pathFormattedDateTime()+".log").toFile(), true));
-
-		Utils.addShutDownTask(() -> {
-			try {
-				WRITER.flush();
-				WRITER.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			} 
-		});
-	}
 	private final StringBuilder sb = new StringBuilder();
-	private final boolean stacktrace; 
-	
+	private final boolean stacktrace;
+	private volatile Writer writer;
+
 	public LogHandler() {
 		LogManager manager = LogManager.getLogManager();
-        String cname = getClass().getName();
-        setLevel(Optional.ofNullable(manager.getProperty(cname +".level")).map(String::trim).map(Level::parse).orElse(Level.INFO));
-        setFilter(Optional.ofNullable(manager.getProperty(cname +".filter")).map(String::trim).<Filter>map(this::parse).orElse(null));
-        stacktrace =  Optional.ofNullable(manager.getProperty(cname +".stacktrace")).map(String::trim).map("true"::equals).orElse(false);
-        
-        try {
-        	setEncoding(Optional.ofNullable(manager.getProperty(cname +".encoding")).orElse("utf-8"));
-        } catch (Exception ex) {
-            try {
-                setEncoding("utf-8");
-            } catch (Exception ex2) {}
-        }
+		String cname = getClass().getName();
+		setLevel(Optional.ofNullable(manager.getProperty(cname +".level")).map(String::trim).map(Level::parse).orElse(Level.INFO));
+		setFilter(Optional.ofNullable(manager.getProperty(cname +".filter")).map(String::trim).<Filter>map(this::parse).orElse(null));
+		stacktrace =  Optional.ofNullable(manager.getProperty(cname +".stacktrace")).map(String::trim).map("true"::equals).orElse(false);
+
+		try {
+			setEncoding(Optional.ofNullable(manager.getProperty(cname +".encoding")).orElse("utf-8"));
+		} catch (Exception ex) {
+			try {
+				setEncoding("utf-8");
+			} catch (Exception ex2) {}
+		}
 	}
 	@SuppressWarnings("unchecked")
 	private <E> E parse(String clsname) {
@@ -63,9 +48,19 @@ public class LogHandler extends Handler {
 
 	@Override
 	public synchronized void publish(LogRecord record) {
-		if(!isLoggable(record) || (getFilter() != null && !getFilter().isLoggable(record)))
-			return;
+		if(writer == null) {
+			try {
+				writer = new FileWriter(MyUtilsPath.TEMP_DIR.resolve("log-"+MyUtilsPath.pathFormattedDateTime()+".log").toFile(), true);
+			} catch (IOException e) {
+				reportError("failed to open logfile", e, ErrorManager.OPEN_FAILURE);
+			}
+		}
 		
+		Level l = record.getLevel();
+		if(isLoggable(record) || l == Level.SEVERE && l == Level.WARNING)
+			publish0(record);
+	}
+	private void publish0(LogRecord record) {
 		sb.setLength(0);
 		format(record);
 
@@ -80,9 +75,10 @@ public class LogHandler extends Handler {
 		System.out.print(buffer);
 
 		try {
-			WRITER.write(buffer);
+			writer.write(buffer);
+			flush();
 		} catch (IOException e) {
-			e.printStackTrace();
+			reportError("failed to write", e, ErrorManager.WRITE_FAILURE);
 		}
 	}
 	public void format(LogRecord record) {
@@ -113,18 +109,22 @@ public class LogHandler extends Handler {
 		if(stacktrace) 
 			t.printStackTrace(new PrintWriter(new StringWriter2(sb)));
 		else 
-			sb.append("  error: ").append(t.getClass().getSimpleName()).append('[').append(t.getMessage()).append('\n');
+			sb.append("  error: ").append(t.getClass().getSimpleName()).append('[').append(t.getMessage()).append("]\n");
 	}
 	@Override
 	public void flush() {
 		try {
-			WRITER.flush();
+			writer.flush();
 		} catch (IOException e) {
-			e.printStackTrace();
+			reportError("failed to flush", e, ErrorManager.FLUSH_FAILURE);
 		}
 	}
 	@Override
 	public void close() throws SecurityException {
-
+		try {
+			writer.close();
+		} catch (IOException e) {
+			reportError("failed to close", e, ErrorManager.CLOSE_FAILURE);
+		}
 	}
 }

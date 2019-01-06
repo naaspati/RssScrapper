@@ -1,6 +1,9 @@
 package scrapper;
 
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.READ;
+import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
 import static sam.string.StringUtils.contains;
 
 import java.io.BufferedReader;
@@ -14,13 +17,16 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.ResourceBundle;
+import java.util.function.BiConsumer;
+import java.util.stream.Collector;
+import java.util.stream.Stream;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -28,6 +34,7 @@ import org.json.JSONTokener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import sam.io.serilizers.IOExceptionConsumer;
 import sam.myutils.MyUtilsException;
 import sam.myutils.MyUtilsPath;
 import sam.string.StringUtils.StringSplitIterator;
@@ -35,7 +42,7 @@ import scrapper.scrapper.Config;
 
 public class Utils {
 	private static final Logger LOGGER = Utils.logger(Utils.class);
-	
+
 	private Utils() {}
 
 	public static final Path APP_DATA = Paths.get("app_data");
@@ -46,8 +53,7 @@ public class Utils {
 	public static final int BUFFER_SIZE;
 
 	private static final Collection<Runnable> tasks = new ArrayList<>();
-	private static Runnable last_task;
-	
+
 	private static final Map<String, String> ALL_MIME_EXT_MAP = new HashMap<>();
 	private static final Map<String, String> FREQUENT_MIME_EXT_MAP = new HashMap<>();
 
@@ -67,19 +73,11 @@ public class Utils {
 		ResourceBundle.clearCache();
 		MyUtilsException.noError(() -> Files.createDirectories(APP_DATA));
 
-		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-			synchronized (tasks) {
-				tasks.forEach(Runnable::run);
-				if(last_task != null)
-					last_task.run();
-			}
-		}));
-		
 		tasks.add(() -> {
 			synchronized (mime_mutex) {
 				if(frequent_loaded && frequent_initial_size != FREQUENT_MIME_EXT_MAP.size())
 					writeMimeCache(frequentMimeFilePath(), FREQUENT_MIME_EXT_MAP);
-				
+
 				if(all_loaded) {
 					Path p = allMimeFilePath();
 					if(Files.notExists(p))
@@ -114,9 +112,12 @@ public class Utils {
 	public static Logger logger(Class<?> cls) {
 		return LoggerFactory.getLogger(cls);
 	}
-	
+	public static Logger logger(String prefix, String suffix) {
+		return LoggerFactory.getLogger(prefix+"("+suffix +")");
+	}
+
 	private static void writeMimeCache(Path p, Map<String, String> map) {
-		try(OutputStream os = Files.newOutputStream(p, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+		try(OutputStream os = Files.newOutputStream(p, CREATE, TRUNCATE_EXISTING);
 				OutputStreamWriter oss = new OutputStreamWriter(os, "utf-8");
 				BufferedWriter writer = new BufferedWriter(oss);) {
 			for (Entry<String, String> e : map.entrySet()) {
@@ -152,12 +153,12 @@ public class Utils {
 				LOGGER.warn("not associated ext found with mime: \""+mime+"\"");
 				return s;
 			}
-			
+
 			FREQUENT_MIME_EXT_MAP.put(mime, s);
 			return s;
 		}
 	}
-	
+
 	private static Path frequentMimeFilePath() {
 		return APP_DATA.resolve("frequent-mime-cache.tsv");
 	}
@@ -167,7 +168,7 @@ public class Utils {
 	private static boolean loadMimeCache(Path p, Map<String, String> map) {
 		if(Files.notExists(p))
 			return false;
-		
+
 		try {
 			Files.lines(p).forEach(s -> {
 				int n = s.indexOf('\t');
@@ -199,10 +200,10 @@ public class Utils {
 			throw new RuntimeException("failed reading \""+filename+"\"", e);
 		}
 	}
-	
+
 	private static final String[] numbers = new String[100];
 	public static final Path TEMP_DIR = MyUtilsPath.TEMP_DIR;
-	
+
 	static {
 		for (int i = 0; i < numbers.length; i++) 
 			numbers[i] = Integer.toString(i);
@@ -221,15 +222,99 @@ public class Utils {
 		int n = 0;
 		for (String s : json.keySet()) 
 			configs[n++] = new Config(s, json.getJSONObject(s));
-		
+
 		return configs;
 	}
 
-	public static void setLastTask(Runnable last_task) {
+	public static void exit() {
 		StackTraceElement t = Thread.currentThread().getStackTrace()[2]; 
 		if(!(t.getFileName().equals(MainView.class.getSimpleName()+".java") && t.getClassName().equals(MainView.class.getName())))
 			throw new IllegalAccessError("only accessfrom: "+MainView.class.getName());
+
+		synchronized (tasks) {
+			tasks.forEach(Runnable::run);
+		}
+	}
+
+	public static Stream<String> lines(Path path) throws IOException {
+		return Files.lines(path)
+				.filter(s -> !s.isEmpty() && s.charAt(0) != '#');
+	}
+	public static <E> E readList(Path path, Logger logger, Collector<String, ?, E> collector) {
+		try {
+			E e = lines(path).collect(collector);
+			logger.debug("read: "+path);
+			return e;
+		} catch (IOException e) {
+			LOGGER.error("failed to read: "+path+", error: "+e);
+		}
+		return null;
+	}
+	private static BufferedWriter writer(Path path) throws IOException {
+		return Files.newBufferedWriter(path, CREATE, APPEND);
+	}
+	
+	public static void writeWithDate(IOExceptionConsumer<BufferedWriter> write, Path path, Logger logger) {
+		try(BufferedWriter writer = writer(path)) {
+			writer.write("#" + LocalDateTime.now()+"\n");
+			write.accept(writer);
+			writer.write('\n');
+			writer.flush();
+		} catch (IOException e) {
+			logger.error("failed to write: "+path+", where: "+Thread.currentThread().getStackTrace()[3], e);
+			return ;
+		}
+		logger.info("saved: "+path);
+	}
+	
+	public static void writeWithDate(Iterable<String> list, Path path, Logger logger) {
+		writeWithDate(writer -> {
+			for (String s : list) {
+				writer.write(s);
+				writer.write('\n');
+			}
+		}, path, logger);
+	}
+	@SuppressWarnings("rawtypes")
+	public static void writeWithDate(Map<?, ?> map, Path path, Logger logger) {
+		if(map.isEmpty())
+			return;
 		
-		Utils.last_task = last_task;
+		writeWithDate(writer -> {
+			for (Entry e : map.entrySet()) {
+				writer.append(toString(e.getKey())).append('\t')
+				.append(toString(e.getValue())).append('\n');
+			}
+		}, path, logger);
+	}
+	public static CharSequence toString(Object key) {
+		return key == null ? "" : key.toString();
+	}
+	public static void linesTabSeparated(Path path, BiConsumer<String, String> action) throws IOException {
+		lines(path)
+		.forEach(s -> {
+			int n = s.indexOf('\t');
+			if(n >= 0)
+				action.accept(s.substring(0, n), s.substring(n+1));
+		});
+	}
+	public static Map<String, String> readMap(Path path, Logger logger) {
+		Map<String, String> map = new HashMap<>();
+		try {
+			linesTabSeparated(path, map::put);
+			logger.debug("read: "+path);
+		} catch (IOException e) {
+			logger.error("failed to read: "+path+", where: "+Thread.currentThread().getStackTrace()[2], e);
+		}
+		return map;
+	}
+
+	public static void write(Path path, Iterable<String> itr, Logger logger) {
+		try {
+			Files.write(path, itr, CREATE, TRUNCATE_EXISTING);
+			logger.debug("saved: "+path);
+		} catch (IOException e) {
+			logger.error("failed to read: "+path+", where: "+Thread.currentThread().getStackTrace()[2], e);
+		}
 	}
 }

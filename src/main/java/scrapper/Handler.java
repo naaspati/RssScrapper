@@ -1,4 +1,4 @@
-package scrapper.scrapper;
+package scrapper;
 
 import static sam.console.ANSI.red;
 import static sam.console.ANSI.yellow;
@@ -9,6 +9,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -28,19 +30,26 @@ import sam.collection.ArraysUtils;
 import sam.console.ANSI;
 import sam.io.serilizers.StringWriter2;
 import sam.myutils.Checker;
+import sam.myutils.MyUtilsException;
 import sam.string.StringUtils.StringSplitIterator;
-import scrapper.ScrappingException;
-import scrapper.Utils;
+import scrapper.scrapper.Config;
+import scrapper.scrapper.PathResolverWrap;
+import scrapper.scrapper.ScrappingResult;
 import scrapper.scrapper.Selector.YoutubeList;
 
-public class Handler implements Closeable {
+class Handler implements Closeable {
 	private static final String FAILED_MARKER;
 	private static final String EMPTY_MARKER;
 	private static final String COMPLETED_MARKER;
 	private static final String YOUTUBE_MARKER;
 	private static final String DOWNLOAD_STATUS_MARKER;
+	private static final String DURL_MARKER = "DURL: ";
+	
+	private static final Path MY_DIR = Utils.TEMP_DIR.resolve( Handler.class.getName());
 
 	static {
+		MyUtilsException.hideError(() -> Files.createDirectories(MY_DIR));
+		
 		char[] chars = new char[40];
 
 		FAILED_MARKER = marker("FAILED", chars);
@@ -83,9 +92,7 @@ public class Handler implements Closeable {
 		return hs;
 	}
 
-	private static final Logger LOGGER = Utils.logger(Handler.class);
-	private static final Path MY_DIR = Utils.TEMP_DIR.resolve( Handler.class.getName());
-
+	private final Logger logger;
 	private final Config config;
 
 	private final Set<String> _failedUrls, _emptyUrls, _youtubeUrls, _completedUrls;
@@ -95,6 +102,7 @@ public class Handler implements Closeable {
 	private final AtomicInteger completed_subdownload = new AtomicInteger();
 	private final AtomicInteger total_subdownload = new AtomicInteger();
 	private final AtomicInteger failed_subdownload = new AtomicInteger();
+	private final AtomicInteger completedCount = new AtomicInteger();
 	private final String name;
 
 	public Handler(Config config) throws IOException {
@@ -104,6 +112,7 @@ public class Handler implements Closeable {
 	private Handler(Config config, String name) throws IOException {
 		this.config = config;
 		this.name = Objects.requireNonNull(name);
+		this.logger = Utils.logger(name, "handler");
 		Path path = cachePath();
 
 		boolean initialize = config != null;
@@ -116,20 +125,23 @@ public class Handler implements Closeable {
 			durls = initialize ? new HashMap<>() : null;
 		} else {
 			durls = new HashMap<>();
-			HashMap<String, Set<String>> map = loadCache(path);
+			HashMap<String, List<String>> map = loadCache(path);
+			
+			_failedUrls = set(map, FAILED_MARKER); 
+			_emptyUrls = set(map, EMPTY_MARKER); 
+			_youtubeUrls = set(map, YOUTUBE_MARKER); 
+			_completedUrls  = set(map, COMPLETED_MARKER);
+			
+			List<String> set = map.get(DOWNLOAD_STATUS_MARKER);
 
-			_failedUrls = map.get(FAILED_MARKER); 
-			_emptyUrls = map.get(EMPTY_MARKER); 
-			_youtubeUrls = map.get(YOUTUBE_MARKER); 
-			_completedUrls  = map.get(COMPLETED_MARKER);
-
-			Set<String> set = map.get(DOWNLOAD_STATUS_MARKER);
 			if(!set.isEmpty()) {
 				DUrls current = null;
+				
+				System.out.println(String.join("\n", set));
 
 				for (String s : set) {
 					StringSplitIterator split = new StringSplitIterator(s, '\t', Integer.MAX_VALUE);
-
+					
 					if(s.startsWith(DURL_MARKER)) {
 						String url = split.next().substring(DURL_MARKER.length());
 						current = durls.computeIfAbsent(url, DUrls::new);
@@ -150,11 +162,14 @@ public class Handler implements Closeable {
 		return MY_DIR.resolve(name+".txt");
 	}
 
+	private Set<String> set(HashMap<String, List<String>> map, String key) {
+		return new HashSet<>(map.get(key));
+	}
 	private Set<String> set(boolean initialize) {
 		return initialize ? new HashSet<>() : null;
 	}
-	private HashMap<String, Set<String>> loadCache(Path path) throws IOException {
-		HashMap<String, Set<String>> map = new HashMap<>();
+	private HashMap<String, List<String>> loadCache(Path path) throws IOException {
+		HashMap<String, List<String>> map = new HashMap<>();
 
 		for (String s : new String[]{
 				YOUTUBE_MARKER,
@@ -162,30 +177,28 @@ public class Handler implements Closeable {
 				EMPTY_MARKER,
 				DOWNLOAD_STATUS_MARKER,
 				COMPLETED_MARKER}) {
-			map.put(s, new HashSet<>());
+			map.put(s, new ArrayList<>());
 		}
 
 		Iterator<String> itr = Files.lines(path).iterator();
-		Set<String> set = null;
+		List<String> set = null;
 
 		while (itr.hasNext()) {
 			String s = itr.next();
 			if(s.isEmpty())
 				continue;
 
-			Set<String> st = map.get(s);
+			List<String> st = map.get(s);
 			if(st != null)
 				set = st;
 			else if(set != null)
 				set.add(s);
 			else 
-				LOGGER.error("no marker found for: "+s);
+				logger.error("no marker found for: "+s);
 		}
 
 		return map;
 	}
-
-	private static final String DURL_MARKER = "DURL: ";
 
 	public class DUrls {
 		private int count;
@@ -196,18 +209,18 @@ public class Handler implements Closeable {
 			this.url = url;
 		}
 
-		public boolean contains(String u) {
+		private boolean contains(String u) {
 			synchronized (LOCK) {
 				return map.containsKey(u);
 			}
 		}
 
-		public void succeed(String u) {
+		private void succeed(String u) {
 			synchronized (LOCK) {
 				map.put(u, Boolean.TRUE);
 			}
 		}
-		public void failed(String u) {
+		private void failed(String u) {
 			synchronized (LOCK) {
 				map.put(u, Boolean.FALSE);
 			}
@@ -223,7 +236,7 @@ public class Handler implements Closeable {
 	@Override
 	public void close() throws IOException {
 		synchronized (LOCK) {
-			Path p = cachePath();
+			Path path = cachePath();
 
 			durls.values().removeIf(map -> {
 				if(map.map.isEmpty())
@@ -237,9 +250,9 @@ public class Handler implements Closeable {
 			});
 
 			if(urls != null && urls.size() <= _completedUrls.size() && _completedUrls.containsAll(urls)) {
-				LOGGER.info(ANSI.green("Completed: ")+name);
-				if(Files.deleteIfExists(p))
-					LOGGER.debug("deleted: {}", p);
+				logger.info(ANSI.green("Completed: ")+name);
+				if(Files.deleteIfExists(path))
+					logger.info("deleted: {}", path);
 				return;
 			}
 
@@ -260,10 +273,10 @@ public class Handler implements Closeable {
 			}
 
 			if(sb.length() == 0)
-				Files.deleteIfExists(p);
+				Files.deleteIfExists(path);
 			else {
-				StringWriter2.setText(p, sb);
-				LOGGER.debug("created: {}", p);
+				StringWriter2.setText(path, sb);
+				logger.info("created: {}", path);
 			}
 		}
 	}
@@ -283,38 +296,38 @@ public class Handler implements Closeable {
 	private int totalUrls = 0;
 	private List<String> urls;
 
-	public AtomicInteger handle(List<String> urls, ExecutorService executorService) {
+	public CountDownLatch handle(List<String> urls, ExecutorService executorService) {
 		if(urls.isEmpty() || config.disable)
 			throw new IllegalStateException(urls.isEmpty() ? "urls.isEmpty()" : "disabled");
 
 		this.totalUrls = urls.size();
 		this.urls = urls;
-		AtomicInteger urls_remaining = new AtomicInteger(urls.size());
+		CountDownLatch urls_remaining = new CountDownLatch(urls.size());
 
 		for (String url : urls) {
 			if(contains(_completedUrls, url)){
-				LOGGER.info("SKIPPED: "+url);
-				urls_remaining.decrementAndGet();
+				logger.info("SKIPPED: "+url);
+				urls_remaining.countDown();
 			} else  
 				execute(url, executorService, urls_remaining);
 		}
 		return urls_remaining;
 	}
 
-	private void execute(String url, ExecutorService executorService, AtomicInteger urls_remaining) {
+	private void execute(String url, ExecutorService executorService, CountDownLatch urls_remaining) {
 		executorService.execute(() -> {
 			try {
 				ScrappingResult v = config.selector.select(url, config);
 
 				synchronized (LOCK) {
 					if(v == ScrappingResult.FAILED){
-						config.selectorLogger.warn(red(url));
+						logger.warn(red(url));
 						_failedUrls.add(url);
 					} else if(v != COMPLETED && (v == EMPTY || v.getUrls().isEmpty())) {
-						config.selectorLogger.warn(formatEmpty, url);
+						logger.warn(formatEmpty, url);
 						_emptyUrls.add(url);
 					} else {
-						config.selectorLogger.info(success_format, url, v == COMPLETED ? "--" : v.getUrls().size());
+						logger.info(success_format, url, v == COMPLETED ? "--" : v.getUrls().size());
 						_failedUrls.remove(url);
 						_emptyUrls.remove(url);
 
@@ -322,20 +335,23 @@ public class Handler implements Closeable {
 
 						if(list instanceof YoutubeList)
 							_youtubeUrls.addAll(list);
-						else if(v != COMPLETED) 
-							download(url, v.getPath(), list, executorService);
+						else if(v != COMPLETED) {
+							PathResolverWrap p2 = new PathResolverWrap(config.pathResolver, v.getPath(), list.size());
+							download(url, p2, list, executorService);
+						}
+						completedCount.incrementAndGet();
 					}
 				}
 			} catch (ScrappingException|IOException e) {
-				config.selectorLogger.warn(red(url), e);
+				logger.warn(red(url), e);
 				add(_failedUrls, url);
 			} finally {
-				urls_remaining.decrementAndGet();
+				urls_remaining.countDown();
 			}
 		});	
 	}
 
-	private void download(final String url0, Path path, List<String> list, ExecutorService executorService) {
+	private void download(final String url0, PathResolverWrap path, List<String> list, ExecutorService executorService) {
 		if(Checker.isEmpty(list))
 			return ;
 
@@ -351,12 +367,12 @@ public class Handler implements Closeable {
 		//download 
 		for (String u : list) {
 			if(completed.contains(u)) {
-				LOGGER.debug("SKIPPED: {}", u);
+				logger.debug("SKIPPED: {}", u);
 				completed_subdownload.incrementAndGet();
 			} else {
 				executorService.execute(() -> {
 					try {
-						if(config.downloader.download(u, path)) {
+						if(config.downloader.download(protocol(u, url0), path)) {
 							completed.succeed(u);
 							completed_subdownload.incrementAndGet();
 						} else  {
@@ -364,7 +380,7 @@ public class Handler implements Closeable {
 							failed_subdownload.incrementAndGet();
 						}
 					} catch (IOException|ScrappingException e) {
-						LOGGER.warn("FAILED: "+u+", error: "+e);
+						logger.warn("FAILED: "+u+", error: "+e);
 						failed_subdownload.incrementAndGet();
 						completed.failed(u);
 					}
@@ -372,7 +388,9 @@ public class Handler implements Closeable {
 			}
 		}
 	}
-
+	private String protocol(String u, String url0) {
+		return !u.startsWith("//") ? u : u.concat(url0.substring(0, url0.indexOf(':')+1));
+	}
 	private void add(Set<String> set, String s) {
 		synchronized (LOCK) {
 			set.add(s);
@@ -421,11 +439,21 @@ public class Handler implements Closeable {
 
 	public void append(StringBuilder failed, StringBuilder empty) {
 		synchronized (LOCK) {
-			if(!_failedUrls.isEmpty())
+			if(!_failedUrls.isEmpty()) {
+				failed.append("# ").append(name).append('\n');
 				_failedUrls.forEach(s -> failed.append(s).append('\n'));
+				failed.append('\n');
+			}
 
-			if(!_emptyUrls.isEmpty())
+			if(!_emptyUrls.isEmpty()) {
+				empty.append("# ").append(name).append('\n');
 				_emptyUrls.forEach(s -> empty.append(s).append('\n'));
+				empty.append('\n');
+			}
 		}
+	}
+
+	public int getScrapCompletedCount() {
+		return completedCount.get();
 	}
 }

@@ -13,4 +13,5 @@ interface ConfigKeys {
 	String SELECTOR = "selector";
 	String URL_FILTER = "url-filter";
 	String DOWNLOADER = "downloader";
+	String PATH_RESOLVER = "path-resolver";
 }

@@ -2,6 +2,18 @@ package scrapper.scrapper;
 
 import static scrapper.Utils.CONNECT_TIMEOUT;
 import static scrapper.Utils.DOWNLOAD_DIR;
+import static scrapper.scrapper.ConfigKeys.ATTR;
+import static scrapper.scrapper.ConfigKeys.COOKIES;
+import static scrapper.scrapper.ConfigKeys.DIR;
+import static scrapper.scrapper.ConfigKeys.DISABLE;
+import static scrapper.scrapper.ConfigKeys.DOWNLOADER;
+import static scrapper.scrapper.ConfigKeys.FOLLOW_REDIRECTS;
+import static scrapper.scrapper.ConfigKeys.HEADERS;
+import static scrapper.scrapper.ConfigKeys.PATH_RESOLVER;
+import static scrapper.scrapper.ConfigKeys.RSS;
+import static scrapper.scrapper.ConfigKeys.SELECTOR;
+import static scrapper.scrapper.ConfigKeys.TIMEOUT;
+import static scrapper.scrapper.ConfigKeys.URL_FILTER;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -9,7 +21,6 @@ import java.lang.reflect.Field;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -21,6 +32,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.json.JSONObject;
 import org.jsoup.Connection;
@@ -28,39 +40,37 @@ import org.jsoup.helper.HttpConnection;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import sam.myutils.Checker;
 import scrapper.Utils;
 import scrapper.scrapper.UrlFilter.DefaultUrlFilter;
 import scrapper.scrapper.UrlFilter.SpecializedUrlFilter;
-import static scrapper.scrapper.ConfigKeys.*;
 
 public final class Config implements Closeable {
-	private static final Logger LOGGER = Utils.logger(Config.class);
 	private static final Set<String> query_selectors = new HashSet<>();
-	
+
 	public final String name, attr, rss;
 	public final Path dir;
 	public final int timeout;
 	public final Boolean followRedirects;
 	public final boolean disable;
+	public final boolean ifSingle;
 
 	public final UrlFilter urlFilter;
 	public final Selector selector; 
 	public final Downloader downloader;
-
-	final Logger selectorLogger;
+	public final PathResolver pathResolver;
 
 	private final Map<String, String> cookies, headers;
+	private final Logger logger;
 
-	private static final Path COMMONS_DIR = DOWNLOAD_DIR.resolve("commons");
 	private static final Set<String> ALL_KEYS;
 
 	static {
 		Set<String> set = new HashSet<>();
 		ALL_KEYS = Collections.unmodifiableSet(set);
 		Path config_query_selectors = Utils.APP_DATA.resolve("config_query_selectors");
-		
+
 		try {
 			if(Files.exists(config_query_selectors))
 				Files.lines(config_query_selectors).forEach(query_selectors::add);
@@ -69,37 +79,37 @@ public final class Config implements Closeable {
 		} catch (IOException | IllegalArgumentException | IllegalAccessException e) {
 			throw new RuntimeException(e);
 		}
-		
+
 		int size = query_selectors.size();
 		Utils.addShutDownTask(() -> {
-			if(query_selectors.size() != size) {
-				try {
-					Files.write(config_query_selectors, query_selectors, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			}
-				
+			if(query_selectors.size() != size) 
+				Utils.write(config_query_selectors, query_selectors, Utils.logger(Config.class));
 		});
 	}
 
 	public Config(String name, JSONObject json) throws InstantiationException, IllegalAccessException, ClassNotFoundException{
-		this.name = Objects.requireNonNull(name);
+		Checker.checkArgument(name != null && !name.trim().isEmpty(), "bad name: \""+name+"\"");
+		if(!name.equals(name.trim()))
+			throw new IllegalArgumentException("name changed after trimming: \""+name+"\"");
+		
+		this.name = name;
+		this.logger = Utils.logger(name, "config");
 		this.attr =  Optional.ofNullable(json.opt(ATTR)).map(s -> (String)s).orElse("src");
-		this.dir = Optional.ofNullable((String)json.opt(DIR)).map(DOWNLOAD_DIR::resolve).orElse(COMMONS_DIR);
+		this.dir = Optional.ofNullable((String)json.opt(DIR)).map(DOWNLOAD_DIR::resolve).orElseGet(() -> DOWNLOAD_DIR.resolve(name));
 		this.cookies = map(json.optJSONObject(COOKIES));
 		this.headers = map(json.optJSONObject(HEADERS));
 		this.rss = (String)json.opt(RSS);
 		this.timeout = json.optInt(TIMEOUT, CONNECT_TIMEOUT);
 		this.followRedirects = (Boolean) json.opt(FOLLOW_REDIRECTS);
 		this.disable = json.optBoolean(DISABLE);
-		
+		this.ifSingle = json.optBoolean("ifSingle", true);
+
 		try {
 			urlFilter = urlFilter(json);
 
 			selector = disable ? null : selector(json);
-			selectorLogger = disable ? null : LoggerFactory.getLogger(name);
-			downloader = disable ? null : downloader(json); 
+			downloader = disable ? null : parse(json, DOWNLOADER, InitializeAs.DOWNLOADER, DefaultDownloader::new);
+			pathResolver = disable ? null : parse(json, PATH_RESOLVER, InitializeAs.PATH_RESOLVER, DefaultPathResolver::new);
 		} catch (Exception e) {
 			throw new IllegalStateException("failed init: \n"+name+": "+json.toString(4), e);
 		}
@@ -112,15 +122,12 @@ public final class Config implements Closeable {
 		}
 	}
 
-	private Downloader downloader(JSONObject json) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
+	private <E> E parse(JSONObject json, String key, InitializeAs initializeAs, Supplier<E> defaultValue) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
 		Objects.requireNonNull(urlFilter);
 		Objects.requireNonNull(selector);
 
-		Downloader dw = parseClass(json, DOWNLOADER, InitializeAs.DOWNLOADER);
-		return dw != null ? dw : getDefaultDownloader(json);
-	}
-	private Downloader getDefaultDownloader(JSONObject json) {
-		return new DefaultDownloader();
+		E dw = parseClass(json, key, initializeAs);
+		return dw != null ? dw : defaultValue.get();
 	}
 
 	private Selector selector(JSONObject json) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
@@ -139,7 +146,7 @@ public final class Config implements Closeable {
 			try {
 				return object(s);
 			} catch (ClassNotFoundException e) {
-				LOGGER.warn("class not found: \""+s+"\", creating as QuerySelector");
+				logger.warn("class not found: \""+s+"\", creating as QuerySelector");
 				query_selectors.add(s);
 				return new QuerySelector(s);
 			}  
@@ -263,6 +270,7 @@ public final class Config implements Closeable {
 		o.put(URL_FILTER, string(urlFilter));
 		o.put(SELECTOR, string(selector));
 		o.put(DOWNLOADER, string(downloader));
+		o.put(PATH_RESOLVER, string(pathResolver));
 		o.put(COOKIES, cookies);
 		o.put(HEADERS, headers);
 		o.put(TIMEOUT, timeout);
@@ -309,9 +317,8 @@ public final class Config implements Closeable {
 				if(s instanceof AutoCloseable)
 					((AutoCloseable)s).close();
 			} catch (Exception e) {
-				LOGGER.error(s.toString(), e);
+				logger.error(s.toString(), e);
 			}
 		});
 	}
-
 }

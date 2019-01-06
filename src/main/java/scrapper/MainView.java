@@ -1,11 +1,14 @@
 package scrapper;
 import static sam.console.ANSI.FINISHED_BANNER;
+import static scrapper.Utils.DOWNLOAD_DIR;
+import static scrapper.Utils.THREAD_COUNT;
+import static scrapper.Utils.configs;
+import static scrapper.Utils.logger;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,11 +16,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import org.json.JSONException;
@@ -45,11 +49,12 @@ import sam.io.fileutils.FileOpenerNE;
 import sam.io.serilizers.StringWriter2;
 import sam.myutils.Checker;
 import sam.myutils.MyUtilsCmd;
+import sam.myutils.MyUtilsThread;
 import sam.string.StringBuilder2;
 import sam.string.StringUtils;
 
 public final class MainView extends Application {
-	private Logger logger = Utils.logger(getClass());
+	private Logger logger = logger(getClass());
 
 	private final TilePane infoBoxes = new TilePane(10,  10);
 	private final  ProgressBar progressBar = new ProgressBar();
@@ -67,8 +72,7 @@ public final class MainView extends Application {
 		FxAlert.setParent(stage);
 		FxPopupShop.setParent(stage);
 
-		boolean isDownload = getParameters().getRaw().contains("--download");
-		final Collection<String> urls =  isDownload ? null : System.getProperty("urls-file") == null ? inputDialog() : Files.lines(Paths.get(System.getProperty("urls-file"))).distinct().collect(Collectors.toList());
+		final Collection<String> urls = getUrls();
 
 		if(Checker.isEmpty(urls)) {
 			logger.warn(ANSI.red("no input"));
@@ -104,17 +108,16 @@ public final class MainView extends Application {
 	}
 
 	private ConfigWrapper[] configs;
-	private final AtomicInteger active_config = new AtomicInteger(0);
 	private static final Object CONFIGS_LOCK = new Object(); 
-	private ThreadPoolExecutor ex;
+	private ThreadPoolExecutor exs;
 
 	private void start2(final Collection<String> urls) throws IOException, InstantiationException, IllegalAccessException, URISyntaxException, ClassNotFoundException, JSONException {
 		if(urls.isEmpty()){
 			logger.error(ANSI.red("no urls specified"));
-			System.exit(0);
+			exit();
 		}
 
-		this.configs = ArraysUtils.map(Utils.configs(), ConfigWrapper[]::new, ConfigWrapper::new);
+		this.configs = ArraysUtils.map(configs(), ConfigWrapper[]::new, ConfigWrapper::new);
 
 		List<String> unhandled = new ArrayList<>();
 		urls.forEach(url -> {
@@ -127,9 +130,9 @@ public final class MainView extends Application {
 
 		if(unhandled.size() == urls.size()) {
 			logger.error(ANSI.red("ALL BAD URLS"));
-			Files.createDirectories(Utils.DOWNLOAD_DIR);
-			Files.write(Utils.DOWNLOAD_DIR.resolve("bad-urls.txt"), unhandled, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-			System.exit(0);
+			Files.createDirectories(DOWNLOAD_DIR);
+			Files.write(DOWNLOAD_DIR.resolve("bad-urls.txt"), unhandled, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+			exit();
 		}
 
 		configs = ArraysUtils.removeIf(configs, c -> {
@@ -142,7 +145,7 @@ public final class MainView extends Application {
 
 		if(configs.length == 0) {
 			logger.info(ANSI.red("NOTHING TO PROCESS"));
-			Platform.exit();
+			exit();
 			return;
 		}
 
@@ -160,58 +163,37 @@ public final class MainView extends Application {
 		logger.info(sb.toString());
 		sb = null;
 
-		ex = (ThreadPoolExecutor) Executors.newFixedThreadPool(Utils.THREAD_COUNT);
-		addShutdownHook();
-
-		active_config.set(0);
-		configs[0].start(ex);
+		exs = (ThreadPoolExecutor) Executors.newFixedThreadPool(THREAD_COUNT);
+		Runtime.getRuntime().addShutdownHook(new Thread(this::exit));
 
 		stage.setTitle("Running");
-		ex.execute(new CheckRemainingUrls(0));
+		exs.execute(new Next(-1));
 
-		Thread progressThread = new Thread(new ProgressUpdater());
-		progressThread.start();
+		MyUtilsThread.run(false, new ProgressUpdater());
 
 		stage.setOnCloseRequest(e -> {
-			System.out.println("here");
 			if(!FxAlert.showConfirmDialog(null, "sure to close"))
 				e.consume();
 			else {
 				stage.hide();
-				logger.info("shutting down: ExecutorService");
-				ex.shutdownNow();
-				try {
-					ex.awaitTermination(5, TimeUnit.SECONDS);
-					logger.info("shut down: ExecutorService");
-				} catch (InterruptedException e1) {
-					e1.printStackTrace();
-				}
-				System.exit(0);
+				shutDownNow();
 			}
 		});
 	}
 
-	private void addShutdownHook() {
-		Utils.setLastTask(() -> {
-			synchronized(CONFIGS_LOCK) {
-				StringBuilder failed = new StringBuilder();
-				StringBuilder empty = new StringBuilder();
+	private void shutDownNow() {
+		logger.info("ExecutorService.shutdownNow(): start");
+		exs.shutdownNow();
 
-				for (ConfigWrapper c : configs) {
-					c.close();
-					c.append(failed, empty);
-				}
-
-				write(Utils.DOWNLOAD_DIR.resolve("failed.txt"), failed);
-				write(Utils.DOWNLOAD_DIR.resolve("empty.txt"), empty);
-
-				FileOpenerNE.openFile(Utils.DOWNLOAD_DIR.toFile());
-				MyUtilsCmd.beep(5);
-				logger.info("\n\n"+FINISHED_BANNER);
-			}
-		});
+		try {
+			logger.info("ExecutorService.shutdownNow(): waiting");
+			exs.awaitTermination(1, TimeUnit.MINUTES);
+			logger.info("ExecutorService.shutdownNow(): complete");
+		} catch (InterruptedException e1) {
+			e1.printStackTrace();
+		}
+		exit();
 	}
-
 	private static final Object OBJECT = new Object();
 
 	private class ProgressUpdater implements Runnable {
@@ -220,7 +202,7 @@ public final class MainView extends Application {
 		@Override
 		public void run() {
 			while(true) {
-				if(ex.isTerminated())
+				if(exs.isTerminating() || exs.isTerminated())
 					break;
 
 				try {
@@ -235,7 +217,7 @@ public final class MainView extends Application {
 								total += c.getCurrentTotal();
 								progress += c.getProgress();
 							}
-
+							
 							progressBar.setProgress(progress/((double)total));
 							status.setText(Utils.toString(progress)+"/"+Utils.toString(total));
 
@@ -266,72 +248,108 @@ public final class MainView extends Application {
 		}
 	}
 
-	private class CheckRemainingUrls implements Runnable {
+	private class Next implements Runnable {
 		private final int index;
 
-		CheckRemainingUrls(int index) {
-			this(index, false);
-		}
-		CheckRemainingUrls(int index, boolean sleep) {
+		Next(int index) {
 			this.index = index;
 		}
 
 		@Override
 		public void run() {
-			synchronized (CONFIGS_LOCK) {
-				ConfigWrapper c = index >= configs.length ? null : configs[index];
-				logger.debug("1: check if: isUrlsCompleted()"+(c == null ? null : c.name()));
+			CountDownLatch latch = null;
+			int n = index+1;
+			ConfigWrapper c = null;
 
-				if(c == null)
-					startWaitTask();
-				else if(c.isUrlsCompleted()) {
-					logger.debug("found isUrlsCompleted(): "+c.name());	
-					for (int i = index + 1; i < configs.length; i++) {
-						try {
-							configs[i].start(ex);
-							logger.debug("started: {}", c);
-							ex.execute(new CheckRemainingUrls(i));
-							return;
-						} catch (IOException e) {
-							logger.error("failed to start: "+c, e);
-						}	
-					}
-					startWaitTask();
-				} else {
-					logger.debug("sleeping: CheckRemainingUrls");
+			synchronized (CONFIGS_LOCK) {
+				while(n < configs.length) {
 					try {
-						Thread.sleep(2000);
-					} catch (InterruptedException e) {
-						logger.warn("Interrupted: CheckRemainingUrls, skipping startWaitTask();");	
-						return;
+						c = configs[n];
+						latch = c.start(exs);
+						logger.info("started: "+c.name());
+						break;
+					} catch (IOException e) {
+						logger.error("failed to start: "+c, e);
 					}
-					ex.execute(new CheckRemainingUrls(index));
-				} 
+					n++;
+				}
+			}
+
+			if(n >= configs.length)
+				startWaitTask();
+			else {
+				ConfigWrapper cw = c;
+				CountDownLatch cd = latch;
+				int n2 = n;
+
+				exs.execute(() -> {
+					try {
+						logger.debug("waiting to finish: {}", cw.name());
+						cd.await();
+						exs.execute(new Next(n2));
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				});
 			}
 		}
 	}
 
 	private void startWaitTask() {
 		logger.info(ANSI.createBanner("URLS SCRAPPING COMPLETED"));
-		logger.info("shutting down ExecutorService");
-		ex.shutdown();
+		logger.info("ExecutorService.shutdown() : start");
+		exs.shutdown();
 
-		Thread thread = new Thread(() -> {
+		MyUtilsThread.run(false, () -> {
 			try {
-				logger.info("waiting to shutdown ExecutorService");
-				ex.awaitTermination(3, TimeUnit.DAYS);
-				logger.info("shutdown ExecutorService");
-				System.exit(0);
+				logger.info("ExecutorService.shutdown() : waiting");
+				exs.awaitTermination(3, TimeUnit.DAYS);
+				logger.info("ExecutorService.shutdown() : complete");
+				exit();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
-			System.exit(0);
+			exit();
 		});
-		thread.start();
 	} 
 
 
-	private Set<String> inputDialog() {
+	private AtomicBoolean exiting = new AtomicBoolean();
+	
+	private void exit() {
+		if(exiting.get())
+			return;
+		
+		exiting.set(true);
+		Utils.exit();
+		
+		if(configs != null) {
+			synchronized(CONFIGS_LOCK) {
+				StringBuilder failed = new StringBuilder();
+				StringBuilder empty = new StringBuilder();
+
+				for (ConfigWrapper c : configs) {
+					c.close();
+					c.append(failed, empty);
+				}
+
+				try {
+					Files.createDirectories(DOWNLOAD_DIR);
+				} catch (IOException e) {
+					logger.error("failed to create dir: "+DOWNLOAD_DIR, e);
+				}
+				write(DOWNLOAD_DIR.resolve("failed.txt"), failed);
+				write(DOWNLOAD_DIR.resolve("empty.txt"), empty);
+
+				FileOpenerNE.openFile(DOWNLOAD_DIR.toFile());
+				MyUtilsCmd.beep(5);
+				logger.info("\n\n"+FINISHED_BANNER);
+			}
+		}
+		
+		System.exit(0);
+	}
+	private Set<String> getUrls() {
 		TextAreaDialog tt = new TextAreaDialog();
 		tt.setTitle("RSS OWL");
 
@@ -339,10 +357,10 @@ public final class MainView extends Application {
 		.filter(s -> !Checker.isEmptyTrimmed(s))
 		.ifPresent(tt::setContent);
 
-		Path p = Utils.DOWNLOAD_DIR;
+		Path p = DOWNLOAD_DIR;
 		if(Files.exists(p))
 			tt.setImportDir(p.toFile());
-		else if(Files.exists(p = Utils.DOWNLOAD_DIR.getParent()))
+		else if(Files.exists(p = DOWNLOAD_DIR.getParent()))
 			tt.setImportDir(p.toFile());
 
 		tt.setHeaderText("Enter Urls seperated by newline");

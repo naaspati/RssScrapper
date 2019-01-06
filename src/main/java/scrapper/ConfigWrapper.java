@@ -4,30 +4,29 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 
 import sam.myutils.ThrowException;
 import scrapper.scrapper.Config;
-import scrapper.scrapper.Handler;
 
 class ConfigWrapper implements Closeable {
-	private static final Logger LOGGER = Utils.logger(ConfigWrapper.class);
+	private final Logger LOGGER;
 	
 	final Config config;
 	private final List<String> urls = new ArrayList<>();
 	private InfoBox box;
 	private Handler handler;
 	private boolean closed;
-	private AtomicInteger remaining_urls;
 	private int total;
 	private boolean noMoreUrls;
 	private volatile boolean started;
 
 	ConfigWrapper(Config config) {
 		this.config = config;
+		this.LOGGER = Utils.logger(config.name, "ConfigWrapper");
 	}
 	boolean accepts(String url) {
 		checkNoMoreUrls();
@@ -55,19 +54,17 @@ class ConfigWrapper implements Closeable {
 		
 		return box;
 	}
-	void start(ExecutorService ex) throws IOException {
+	CountDownLatch start(ExecutorService ex) throws IOException {
 		if(!noMoreUrls || started) 
 			throw new IllegalStateException("!noMoreUrls:"+(!noMoreUrls)+" || started:"+started);
 		
 		this.started = true;
 		handler = new Handler(config);
-		remaining_urls = handler.handle(urls, ex);
+		
+		return handler.handle(urls, ex);
 	}
 	String name () {
 		return config.name();
-	}
-	boolean isUrlsCompleted() {
-		return remaining_urls.get() == 0;
 	}
 	
 	@Override
@@ -123,7 +120,7 @@ class ConfigWrapper implements Closeable {
 		
 		int t0 = total;
 		int f0 = handler.getScrapFailedCount();
-		int c0 = t0 - remaining_urls.get() - f0;
+		int c0 = handler.getScrapCompletedCount();
 		
 		box.main.completed.setText(Utils.toString(c0));
 		box.main.failed.setText(Utils.toString(f0));

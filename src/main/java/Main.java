@@ -12,6 +12,7 @@ import javafx.application.Application;
 import sam.console.ANSI;
 import sam.io.fileutils.FileOpener;
 import sam.myutils.System2;
+import scrapper.FailedDownloader;
 import scrapper.MainView;
 import scrapper.ScrappingException;
 import scrapper.Utils;
@@ -54,22 +55,6 @@ public class Main {
                 new FailedDownloader();
 
             System.exit(0);
-        }
-        
-        for (int i = 0; i < args.length; i++) {
-            String s = args[i];
-            if("--file".equals(s)) {
-                if(args.length < i + 2) {
-                	logger.error(ANSI.red("no file specified for: --file"));
-                    System.exit(0);
-                }
-                String file = args[i+1];
-                if(!new File(file).exists()){
-                    logger.error(ANSI.red("file not found: ")+file);
-                    System.exit(0);
-                }
-                System.setProperty("urls-file", file);
-            }
         }
         
         Application.launch(MainView.class, args);
