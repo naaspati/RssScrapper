@@ -9,7 +9,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 
-import javafx.application.Platform;
 import sam.myutils.ThrowException;
 import scrapper.scrapper.Config;
 import scrapper.scrapper.Handler;

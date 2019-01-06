@@ -47,7 +47,7 @@ public interface UrlFilter {
 
 		@Override
 		public boolean accepts(String url) {
-			return url.startsWith(s1) || url.startsWith(s2);
+			return url.startsWith(s1) || (s2 != null && url.startsWith(s2));
 		}
 		@Override
 		public String toString() {

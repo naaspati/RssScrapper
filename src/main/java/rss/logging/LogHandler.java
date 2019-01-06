@@ -3,6 +3,9 @@ package rss.logging;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.Optional;
+import java.util.logging.ErrorManager;
+import java.util.logging.Filter;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
@@ -13,7 +16,9 @@ import sam.myutils.MyUtilsPath;
 import sam.string.StringWriter2;
 import scrapper.Utils;
 
-public class Handler2 extends Handler {
+// import sam.logging.LogFilter;
+
+public class LogHandler extends Handler {
 	private static final FileWriter WRITER;
 
 	static {
@@ -28,23 +33,39 @@ public class Handler2 extends Handler {
 			} 
 		});
 	}
-	@Override
-	public boolean isLoggable(LogRecord record) {
-		return "scrapper.MainView".equals(record.getLoggerName());
-		//return super.isLoggable(record);
-	}
-
 	private final StringBuilder sb = new StringBuilder();
-	private final boolean debug, disable;
-	public Handler2() {
-		debug = "true".equals(LogManager.getLogManager().getProperty(getClass().getName().concat(".debug")));
-		disable = "true".equals(LogManager.getLogManager().getProperty(getClass().getName().concat(".disable")));
+	private final boolean stacktrace; 
+	
+	public LogHandler() {
+		LogManager manager = LogManager.getLogManager();
+        String cname = getClass().getName();
+        setLevel(Optional.ofNullable(manager.getProperty(cname +".level")).map(String::trim).map(Level::parse).orElse(Level.INFO));
+        setFilter(Optional.ofNullable(manager.getProperty(cname +".filter")).map(String::trim).<Filter>map(this::parse).orElse(null));
+        stacktrace =  Optional.ofNullable(manager.getProperty(cname +".stacktrace")).map(String::trim).map("true"::equals).orElse(false);
+        
+        try {
+        	setEncoding(Optional.ofNullable(manager.getProperty(cname +".encoding")).orElse("utf-8"));
+        } catch (Exception ex) {
+            try {
+                setEncoding("utf-8");
+            } catch (Exception ex2) {}
+        }
+	}
+	@SuppressWarnings("unchecked")
+	private <E> E parse(String clsname) {
+		try {
+			return (E) Class.forName(clsname).newInstance();
+		} catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+			reportError("failed to parse class: "+clsname, e, ErrorManager.GENERIC_FAILURE);
+		}
+		return null;
 	}
 
 	@Override
 	public synchronized void publish(LogRecord record) {
-		if(disable)
+		if(!isLoggable(record) || (getFilter() != null && !getFilter().isLoggable(record)))
 			return;
+		
 		sb.setLength(0);
 		format(record);
 
@@ -56,8 +77,7 @@ public class Handler2 extends Handler {
 		char[] buffer = new char[sb.length()];
 		sb.getChars(0, sb.length(), buffer, 0);
 
-		if("scrapper.MainView".equals(record.getLoggerName()))
-			System.out.print(buffer);
+		System.out.print(buffer);
 
 		try {
 			WRITER.write(buffer);
@@ -90,7 +110,7 @@ public class Handler2 extends Handler {
 		if(t == null)
 			return;
 
-		if(debug) 
+		if(stacktrace) 
 			t.printStackTrace(new PrintWriter(new StringWriter2(sb)));
 		else 
 			sb.append("  error: ").append(t.getClass().getSimpleName()).append('[').append(t.getMessage()).append('\n');
