@@ -3,7 +3,6 @@ package scrapper;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 
@@ -16,7 +15,7 @@ class ConfigWrapper implements Closeable {
 	private final Logger LOGGER;
 	
 	final Config config;
-	private final List<String> urls = new ArrayList<>();
+	private final ArrayList<String> urls = new ArrayList<>();
 	private InfoBox box;
 	private Handler handler;
 	private boolean closed;
@@ -47,7 +46,8 @@ class ConfigWrapper implements Closeable {
 		
 		if(!noMoreUrls && urls.isEmpty() || config.disable || box != null) 
 			throw new IllegalStateException();
-
+		
+		urls.trimToSize();
 		box = new InfoBox(name());
 		this.total = urls.size();
 		box.main.total.setText(Utils.toString(total));
@@ -97,7 +97,7 @@ class ConfigWrapper implements Closeable {
 	public boolean isDisabled() {
 		return config.disable;
 	}
-	public Object size() {
+	public int size() {
 		return urls.size();
 	}
 	public void append(StringBuilder failed, StringBuilder empty) {
@@ -135,5 +135,8 @@ class ConfigWrapper implements Closeable {
 		
 		currentTotal = t0 + t;
 		progress = f0 + c0 + f + c;
+	}
+	public Handler handler() {
+		return handler;
 	}
 }

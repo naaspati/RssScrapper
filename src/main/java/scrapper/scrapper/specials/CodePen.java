@@ -38,6 +38,8 @@ public class CodePen implements UrlFilter, Closeable, Settable {
 	public boolean accepts(String url) {
 		if(!prefix.accepts(url))
 			return false;
+		
+		newPens.add(url);
 		return true;
 	}
 	public void close() throws IOException {

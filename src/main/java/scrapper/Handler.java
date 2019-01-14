@@ -136,8 +136,6 @@ class Handler implements Closeable {
 
 			if(!set.isEmpty()) {
 				DUrls current = null;
-				
-				System.out.println(String.join("\n", set));
 
 				for (String s : set) {
 					StringSplitIterator split = new StringSplitIterator(s, '\t', Integer.MAX_VALUE);
@@ -249,29 +247,24 @@ class Handler implements Closeable {
 				return false;
 			});
 
+			StringBuilder sb = new StringBuilder();
 			if(urls != null && urls.size() <= _completedUrls.size() && _completedUrls.containsAll(urls)) {
 				logger.info(ANSI.green("Completed: ")+name);
-				if(Files.deleteIfExists(path))
-					logger.info("deleted: {}", path);
-				return;
+				append(urls, COMPLETED_MARKER, sb);
+			} else {
+				append(_failedUrls, FAILED_MARKER, sb); 
+				append(_emptyUrls, EMPTY_MARKER, sb); 
+				append(_youtubeUrls, YOUTUBE_MARKER, sb);
+				append(_completedUrls, COMPLETED_MARKER, sb);
+
+				if(!durls.isEmpty()) {
+					sb.append(DOWNLOAD_STATUS_MARKER).append('\n');
+					durls.forEach((url,map) -> {
+						sb.append(DURL_MARKER).append(url).append('\t').append(map.count).append('\n');
+						map.map.forEach((s,t) -> sb.append(s).append('\t').append(t == Boolean.TRUE ? "true" : "false").append('\n'));
+					});	
+				}
 			}
-
-			StringBuilder sb = new StringBuilder();
-
-			append(_failedUrls, FAILED_MARKER, sb); 
-			append(_emptyUrls, EMPTY_MARKER, sb); 
-			append(_youtubeUrls, YOUTUBE_MARKER, sb);
-			append(_completedUrls, COMPLETED_MARKER, sb);
-
-
-			if(!durls.isEmpty()) {
-				sb.append(DOWNLOAD_STATUS_MARKER).append('\n');
-				durls.forEach((url,map) -> {
-					sb.append(DURL_MARKER).append(url).append('\t').append(map.count).append('\n');
-					map.map.forEach((s,t) -> sb.append(s).append('\t').append(t == Boolean.TRUE ? "true" : "false").append('\n'));
-				});	
-			}
-
 			if(sb.length() == 0)
 				Files.deleteIfExists(path);
 			else {
@@ -280,7 +273,7 @@ class Handler implements Closeable {
 			}
 		}
 	}
-	private void append(Set<String> list, String marker, StringBuilder sb) {
+	private void append(Collection<String> list, String marker, StringBuilder sb) {
 		if(Checker.isEmpty(list))
 			return;
 
@@ -439,18 +432,18 @@ class Handler implements Closeable {
 
 	public void append(StringBuilder failed, StringBuilder empty) {
 		synchronized (LOCK) {
-			if(!_failedUrls.isEmpty()) {
-				failed.append("# ").append(name).append('\n');
-				_failedUrls.forEach(s -> failed.append(s).append('\n'));
-				failed.append('\n');
-			}
-
-			if(!_emptyUrls.isEmpty()) {
-				empty.append("# ").append(name).append('\n');
-				_emptyUrls.forEach(s -> empty.append(s).append('\n'));
-				empty.append('\n');
-			}
+			append(failed, _failedUrls);
+			append(empty, _emptyUrls);
 		}
+	}
+	
+	private void append(StringBuilder sb, Set<String> list) {
+		if(list.isEmpty())
+			return;
+		
+		sb.append("# ").append(name).append(" (").append(list.size()).append(')').append('\n');
+		list.forEach(s -> sb.append(s).append('\n'));
+		sb.append('\n');
 	}
 
 	public int getScrapCompletedCount() {

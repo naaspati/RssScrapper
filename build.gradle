@@ -24,10 +24,12 @@ run {
   systemProperties['java.util.logging.config.file'] = 'logging.properties'
   systemProperties['java.io.tmpdir'] = 'java_temp'
 }
-
 task deleteJars {
-  delete fileTree(appdir) {
-    include '*.jar'
+  doLast {
+     file(appdir).listFiles().each({
+       if(it.name.endsWith('.jar'))
+         it.delete();
+     });
   }
 }
 

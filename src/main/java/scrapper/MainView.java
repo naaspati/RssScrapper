@@ -49,9 +49,9 @@ import sam.io.fileutils.FileOpenerNE;
 import sam.io.serilizers.StringWriter2;
 import sam.myutils.Checker;
 import sam.myutils.MyUtilsCmd;
-import sam.myutils.MyUtilsThread;
 import sam.string.StringBuilder2;
 import sam.string.StringUtils;
+import sam.thread.MyUtilsThread;
 
 public final class MainView extends Application {
 	private Logger logger = logger(getClass());
@@ -135,6 +135,34 @@ public final class MainView extends Application {
 			exit();
 		}
 
+		StringBuilder2 sb = new StringBuilder2();
+		int max = 0;
+		int count = 0;
+		for (ConfigWrapper c : configs) {
+			if(c.isEmpty())
+				continue;
+			count++;
+			max = Math.max(max, c.name().length());
+		}
+		if(count != 0) {
+			sb.yellow("configs: ").append(count).append('\n');
+			String format =  ANSI.yellow("%"+(max+5)+"s")+": %s\n";
+
+			for (ConfigWrapper c : configs) {
+				if(!c.isEmpty()) {
+					sb.format(format, c.name(), c.size());
+					if(c.isDisabled()) {
+						sb.setLength(sb.length() - 1);
+						sb.red(" (DISABLED)\n");
+					}
+				}
+			} 
+
+			sb.ln().ln();
+			logger.info(sb.toString());
+			sb = null;	
+		}
+
 		configs = ArraysUtils.removeIf(configs, c -> {
 			if(c.isDisabled() || c.isEmpty()) {
 				c.close();
@@ -149,19 +177,8 @@ public final class MainView extends Application {
 			return;
 		}
 
-		StringBuilder2 sb = new StringBuilder2();
-		sb.yellow("configs: ").append(configs.length).append('\n');
-		int max = Arrays.stream(configs).mapToInt(s -> s.name().length()).max().getAsInt();
-		String format =  ANSI.yellow("%"+(max+5)+"s")+": %s\n";
-
-		for (ConfigWrapper c : configs) {
+		for (ConfigWrapper c : configs) 
 			infoBoxes.getChildren().add(c.noMoreUrls());
-			sb.format(format, c.name(), c.size());
-		}
-
-		sb.ln().ln();
-		logger.info(sb.toString());
-		sb = null;
 
 		exs = (ThreadPoolExecutor) Executors.newFixedThreadPool(THREAD_COUNT);
 		Runtime.getRuntime().addShutdownHook(new Thread(this::exit));
@@ -217,7 +234,7 @@ public final class MainView extends Application {
 								total += c.getCurrentTotal();
 								progress += c.getProgress();
 							}
-							
+
 							progressBar.setProgress(progress/((double)total));
 							status.setText(Utils.toString(progress)+"/"+Utils.toString(total));
 
@@ -298,39 +315,55 @@ public final class MainView extends Application {
 	private void startWaitTask() {
 		logger.info(ANSI.createBanner("URLS SCRAPPING COMPLETED"));
 		logger.info("ExecutorService.shutdown() : start");
-		exs.shutdown();
 
-		MyUtilsThread.run(false, () -> {
-			try {
-				logger.info("ExecutorService.shutdown() : waiting");
-				exs.awaitTermination(3, TimeUnit.DAYS);
-				logger.info("ExecutorService.shutdown() : complete");
-				exit();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-			exit();
-		});
+		startWaitTask0();
 	} 
-
-
+	private void startWaitTask0() {
+		if(exs.getActiveCount() != 1)
+			exs.execute(this::startWaitTask0);
+		else {
+			MyUtilsThread.run(false, () -> {
+				try {
+					exs.shutdown();
+					logger.info("ExecutorService.shutdown() : waiting");
+					exs.awaitTermination(3, TimeUnit.DAYS);
+					logger.info("ExecutorService.shutdown() : complete");
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				} finally {
+					exit();	
+				}
+				
+			});
+		}
+	}
 	private AtomicBoolean exiting = new AtomicBoolean();
-	
+
 	private void exit() {
 		if(exiting.get())
 			return;
-		
+
 		exiting.set(true);
 		Utils.exit();
-		
+
 		if(configs != null) {
 			synchronized(CONFIGS_LOCK) {
 				StringBuilder failed = new StringBuilder();
 				StringBuilder empty = new StringBuilder();
+				StringBuilder2 status = new StringBuilder2();
+				status.append("\n\n").append(FINISHED_BANNER).append("\n\n");
+				
+				status.yellow("configs: ").append(configs.length).append('\n');
+				String format =  ANSI.yellow("%"+(Arrays.stream(configs).mapToInt(c -> c.name().length()).max().orElse(0)+5)+"s")+": "+ANSI.yellow("T:")+" %-3s"+ANSI.green(" C:")+" %-3s "+ANSI.red(" F:")+" %-3s -> (t: %-3s  c: %-3s  f: %-3s)\n";
 
 				for (ConfigWrapper c : configs) {
 					c.close();
 					c.append(failed, empty);
+					Handler h = c.handler();
+					if(h == null)
+						continue;
+					
+					status.format(format, c.name(), c.size(), h.getScrapCompletedCount(), h.getScrapFailedCount(), h.totalSubdownload(), h.completedSubdownload(), h.failedSubdownload());
 				}
 
 				try {
@@ -343,10 +376,11 @@ public final class MainView extends Application {
 
 				FileOpenerNE.openFile(DOWNLOAD_DIR.toFile());
 				MyUtilsCmd.beep(5);
-				logger.info("\n\n"+FINISHED_BANNER);
+				
+				logger.info(status.toString());
 			}
 		}
-		
+
 		System.exit(0);
 	}
 	private Set<String> getUrls() {

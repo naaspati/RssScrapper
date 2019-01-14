@@ -88,7 +88,7 @@ public final class Config implements Closeable {
 	}
 
 	public Config(String name, JSONObject json) throws InstantiationException, IllegalAccessException, ClassNotFoundException{
-		Checker.checkArgument(name != null && !name.trim().isEmpty(), "bad name: \""+name+"\"");
+		Checker.mustBeTrue(name != null && !name.trim().isEmpty(), "bad name: \""+name+"\"");
 		if(!name.equals(name.trim()))
 			throw new IllegalArgumentException("name changed after trimming: \""+name+"\"");
 		
