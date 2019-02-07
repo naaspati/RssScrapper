@@ -38,7 +38,7 @@ import org.slf4j.Logger;
 import sam.internetutils.ConnectionConfig;
 import sam.internetutils.InternetUtils;
 import sam.myutils.Checker;
-import sam.reference.WeakQueue;
+import sam.reference.WeakPool;
 import scrapper.ScrappingException;
 import scrapper.Utils;
 
@@ -57,7 +57,6 @@ class DefaultDownloader implements Downloader {
 			this.path = path;
 			this.downloaded = downloaded;
 		}
-		
 	}
 
 	protected static final Set<Path> dirsCreated;
@@ -71,7 +70,7 @@ class DefaultDownloader implements Downloader {
 	protected static final String FILE_NAME_MARKER = "filename=\"";
 	protected static final AtomicInteger COUNTER = new AtomicInteger(0);
 	protected static final ConnectionConfig config = new ConnectionConfig(CONNECT_TIMEOUT, READ_TIMEOUT, false, false, false, BUFFER_SIZE, null);
-	protected static final WeakQueue<byte[]> buffers = new WeakQueue<>(true, () -> new byte[BUFFER_SIZE]);
+	protected static final WeakPool<byte[]> buffers = new WeakPool<>(true, () -> new byte[BUFFER_SIZE]);
 
 	static {
 		Path downloaded_urls_path = APP_DATA.resolve( "downloaded_urls.txt");

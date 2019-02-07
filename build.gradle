@@ -12,7 +12,7 @@ dependencies {
    compile 'org.json:json:20180813'
 }
  
-version = 1.02
+version = 1.04
 sourceCompatibility = JavaVersion.VERSION_1_8 
 targetCompatibility = JavaVersion.VERSION_1_8
  
